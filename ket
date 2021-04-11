@@ -83,6 +83,10 @@ analyze()
     for pt_type in "${patient_types[@]}"; do
       mapfile -t typefiles <<< "$(grep -l "${pt_type} PATIENT_TYPE" ./*)"
 
+      if [[ ${#typefiles} -eq 0 ]]; then
+        continue
+      fi
+
       total_exposures=0
       total_repeats=0
       entry_exposures=0
@@ -114,6 +118,10 @@ analyze()
 
     for day in "${week_days[@]}"; do
       mapfile -t dayfiles <<< "$(grep -l "${day}" ./*)"
+
+      if [[ ${#dayfiles} -eq 0 ]]; then
+        continue
+      fi
 
       total_exposures=0
       total_repeats=0
