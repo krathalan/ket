@@ -1,0 +1,248 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2126
+#
+# Description: Krathalan's Exposure Tracking :)
+#
+# Homepage: https://github.com/krathalan/ket
+# Copyright (C) 2020-2021 Hunter Peavey
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# -----------------------------------------
+# -------------- Guidelines ---------------
+# -----------------------------------------
+
+# This script follows the Google Shell Style Guide:
+# https://google.github.io/styleguide/shell.xml
+
+# This script uses shellcheck: https://www.shellcheck.net/
+
+# See https://vaneyckt.io/posts/safer_bash_scripts_with_set_euxo_pipefail/
+set -Eeuo pipefail
+
+trap "clean_up" EXIT
+
+# -----------------------------------------
+# ----------- Program variables -----------
+# -----------------------------------------
+
+# Colors
+readonly RED=$(tput bold && tput setaf 1)
+readonly NC=$(tput sgr0) # No color/turn off all tput attributes
+
+# Other
+readonly DATA_DIR="${HOME}/.local/share/ket"
+readonly SCRIPT_NAME="${0##*/}"
+
+# -----------------------------------------
+# ------------- User variables ------------
+# -----------------------------------------
+
+# -----------------------------------------
+# --------------- Functions ---------------
+# -----------------------------------------
+
+calculate_percent()
+{
+  local to_return=0
+
+  if [[ $2 != 0 ]]; then
+    to_return="$(awk "BEGIN{print $1/$2}")"
+    to_return="$(awk "BEGIN{print ${to_return}*100}")"
+  fi
+
+  printf "%s" "${to_return}"
+}
+
+analyze()
+{
+  local total_exposures=0
+  local total_repeats=0
+
+  # Repeat rate
+  local entry_exposures=0
+  for entry in "${DATA_DIR}"/*; do
+    entry_exposures="$(grep TOTAL_EXPOSURES "${entry}" | cut -d' ' -f1)"
+    total_exposures=$(( total_exposures + entry_exposures ))
+  done
+
+  local entry_exposures=0
+  for entry in "${DATA_DIR}"/*; do
+    entry_exposures="$(grep TOTAL_REPEATS "${entry}" | cut -d' ' -f1)"
+    total_repeats=$(( total_repeats + entry_exposures ))
+  done
+
+  printf "Total exposures: %s\nTotal repeats: %s\nOverall repeat rate: %s%%\n" "${total_exposures}" "${total_repeats}" "$(calculate_percent ${total_repeats} ${total_exposures})"
+
+  (
+    cd "${DATA_DIR}"
+
+    # patient type
+    local -r patient_types=("i" "o" "p")
+    local typefiles
+
+    for pt_type in "${patient_types[@]}"; do
+      mapfile -t typefiles <<< "$(grep -l "${pt_type} PATIENT_TYPE" ./*)"
+
+      total_exposures=0
+      total_repeats=0
+      entry_exposures=0
+
+      for entry in "${typefiles[@]}"; do
+        entry_exposures="$(grep TOTAL_EXPOSURES "${entry}" | cut -d' ' -f1)"
+        total_exposures=$(( total_exposures + entry_exposures ))
+        entry_exposures="$(grep TOTAL_REPEATS "${entry}" | cut -d' ' -f1)"
+        total_repeats=$(( total_repeats + entry_exposures ))
+      done
+
+      local pretty_print=""
+      case "${pt_type}" in
+        i) pretty_print="Inpatient" ;;
+        o) pretty_print="Outpatient" ;;
+        p) pretty_print="Portable" ;;
+      esac
+
+      printf "%s repeat rate: %s (%s / %s)\n" "${pretty_print}" "$(calculate_percent "${total_repeats}" "${total_exposures}")" "${total_repeats}" "${total_exposures}"
+    done
+
+    # Patient habitus
+
+    # Day of week
+    local -r week_days=("Sun" "Mon" "Tue" "Wed")
+    local dayfiles
+    local total_generic
+    local repeat_generic
+
+    for day in "${week_days[@]}"; do
+      mapfile -t dayfiles <<< "$(grep -l "${day}" ./*)"
+
+      total_exposures=0
+      total_repeats=0
+      entry_exposures=0
+
+      for entry in "${dayfiles[@]}"; do
+        entry_exposures="$(grep TOTAL_EXPOSURES "${entry}" | cut -d' ' -f1)"
+        total_exposures=$(( total_exposures + entry_exposures ))
+        entry_exposures="$(grep TOTAL_REPEATS "${entry}" | cut -d' ' -f1)"
+        total_repeats=$(( total_repeats + entry_exposures ))
+      done
+
+      printf "%s repeat rate: %s%% (%s / %s)\n" "${day}" "$(calculate_percent "${total_repeats}" "${total_exposures}")" "${total_repeats}" "${total_exposures}"
+    done
+  
+  )
+
+  # Time of day
+
+  # Would like to calculate these per exam
+  # Most frequently repeated exam
+  # Least frequently repeated exam
+}
+
+ask_user()
+{
+  local user_response
+
+  read -r -p "$1: " user_response
+
+  printf "%s" "${user_response}"
+}
+
+clean_up()
+{
+  if [[ -d "${TMP_DIR:-}" ]]; then
+    rm -rf "${TMP_DIR}"
+  fi
+}
+
+make_tmp()
+{
+  readonly TMP_DIR="$(mktemp -d -t "${SCRIPT_NAME}_XXXXXXXX")"
+}
+
+new_entry()
+{
+  # We need:
+  # - exam type (chest, lumbar, etc)
+  # - total exposure # (including repeats)
+  # - repeat exposure #
+  # - repeat reason(s)
+  # - patient type (in/out/port)
+  # - patient habitus (light/average/heavy, tall/average/short)
+  # - autorecord date/time 
+
+  make_tmp
+
+  local -r output_file="${TMP_DIR}/$(uuidgen).txt"
+  touch "${output_file}"
+
+  # exam type
+  user_response="$(ask_user "Exam type")"
+  printf "%s EXAM_TYPE\n" "${user_response}" >> "${output_file}"
+
+  # total exposures
+  local user_response
+  user_response="$(ask_user "Total number of EXPOSURES")"
+  printf "%s TOTAL_EXPOSURES\n" "${user_response}" >> "${output_file}"
+
+  # repeat exposures
+  user_response="$(ask_user "Total number of REPEATS")"
+  printf "%s TOTAL_REPEATS\n" "${user_response}" >> "${output_file}"
+
+  # If more than 1 repeat, ask for views and reasons
+  if [[ "${user_response}" -gt 0 ]]; then
+    user_response="$(ask_user "Repeated view(s) (separated by space)")"
+    printf "%s REPEATED_VIEWS\n" "${user_response}" >> "${output_file}"
+    user_response="$(ask_user "Repeat reason(s)")"
+    printf "%s REPEAT_REASON\n" "${user_response}" >> "${output_file}"
+  fi
+
+  # patient type
+  user_response="$(ask_user "Patient type (i/o/p)")"
+  printf "%s PATIENT_TYPE\n" "${user_response}" >> "${output_file}"
+
+  # patient type
+  user_response="$(ask_user "Patient age")"
+  printf "%s PATIENT_AGE\n" "${user_response}" >> "${output_file}"
+
+  # patient habitus
+  user_response="$(ask_user "Weight (l/a/h) + height (t/a/s)")"
+  printf "%s PATIENT_HABITUS\n" "${user_response}" >> "${output_file}"
+
+  # date
+  user_response="$(ask_user "Autorecord date (Y/n)")"
+  case "${user_response}" in
+    [nN][oO]|[nN])
+      user_response="$(ask_user "Enter string to be interpreted by \`date\`")"
+      date -d "${user_response}" >> "${output_file}"
+      ;;
+    *)
+      date >> "${output_file}"
+      ;;
+  esac
+
+  mv "${output_file}" "${DATA_DIR}"
+
+  printf "\nCreated exposure entry %s\n" "${output_file##*/}"
+}
+
+exit_script_on_failure()
+{
+  printf "%sError%s: %s\n" "${RED}" "${NC}" "$1" >&2
+  exit 1
+}
+
+# -----------------------------------------
+# ---------------- Script -----------------
+# -----------------------------------------
+
+[[ "$(whoami)" = "root" ]] &&
+  exit_script_on_failure "This script should NOT be run as root (or sudo)!"
+
+[[ ! -d "${DATA_DIR}" ]] &&
+  mkdir -p "${DATA_DIR}"
+
+case "$1" in
+  analyze) analyze;;
+  new) new_entry ;;
+  *) print_help ;;
+esac
