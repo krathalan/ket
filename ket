@@ -101,7 +101,7 @@ analyze()
         p) pretty_print="Portable" ;;
       esac
 
-      printf "%s repeat rate: %s (%s / %s)\n" "${pretty_print}" "$(calculate_percent "${total_repeats}" "${total_exposures}")" "${total_repeats}" "${total_exposures}"
+      printf "%s repeat rate: %s%% (%s / %s)\n" "${pretty_print}" "$(calculate_percent "${total_repeats}" "${total_exposures}")" "${total_repeats}" "${total_exposures}"
     done
 
     # Patient habitus
