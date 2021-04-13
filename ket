@@ -112,6 +112,10 @@ analyze_helper()
   mapfile -t tmparray <<< "$(jq -r ".data[] | select(.$1 == \"$2\").repeat_exposures" "${DATA_FILE}")"
   repeat_exposures=$(total_array "${tmparray[@]}")
 
+  if [[ "${total_exposures}" == 0 ]] && [[ "${repeat_exposures}" == 0 ]]; then
+    return
+  fi
+
   printf "%s repeat rate: %s%% (%s / %s)\n" "$3" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${repeat_exposures}" "${total_exposures}"
 }
 
@@ -186,10 +190,35 @@ analyze_shift()
     analyze_helper "shift" "${shift_hours}" "${prettyprint}"
   done
 
-  print_header "By hour of day, for each shift"
+  printf "\n"
+
   local -r list_of_hours=(8 9 10 11 12 13 14 15 16 17 18 19 20 21)
-  for hour in "${list_of_hours[@]}"; do
-    analyze_helper "hour_of_day" "${hour}" "${hour}:00-${hour}:59"
+  local tmparray
+  local total_exposures=0
+  local repeat_exposures=0
+  for shift_hours in "${list_of_shifts[@]}"; do
+    case "${shift_hours}" in
+      m) prettyprint="morning shift" ;;
+      e) prettyprint="evening shift" ;;
+      w) prettyprint="weekend shift" ;;
+    esac
+
+    print_header "By hour of day, for ${prettyprint}"
+
+    for hour in "${list_of_hours[@]}"; do
+      mapfile -t tmparray <<< "$(jq -r ".data[] | select(.shift == \"${shift_hours}\") | select(.hour_of_day == \"${hour}\") | .total_exposures" "${DATA_FILE}")"
+      total_exposures=$(total_array "${tmparray[@]}")
+      mapfile -t tmparray <<< "$(jq -r ".data[] | select(.shift == \"${shift_hours}\") | select(.hour_of_day == \"${hour}\") | .repeat_exposures" "${DATA_FILE}")"
+      repeat_exposures=$(total_array "${tmparray[@]}")
+
+      if [[ "${total_exposures}" == 0 ]] && [[ "${repeat_exposures}" == 0 ]]; then
+        continue
+      fi
+
+      printf "%s:00-%s:59 repeat rate: %s%% (%s / %s)\n" "${hour}" "${hour}" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${repeat_exposures}" "${total_exposures}"
+    done
+
+    printf "\n"
   done
 }
 
@@ -199,18 +228,20 @@ analyze()
   shift
 
   if [[ "$#" == 0 ]] || [[ "$1" == "all" ]]; then
-    analyze_basic
-    analyze_type
-    analyze_day_of_week
-    analyze_shift
+    local -r analysis_types=("basic" "type" "day_of_week" "shift")
+    for analysis in "${analysis_types[@]}"; do
+      analyze_"${analysis}"
+      printf "\n"
+    done
     exit
   fi
 
   case "$1" in
-    "basic") analyze_basic;;
-    "patient-type") analyze_type;;
-    "day-of-week") analyze_day_of_week;;
-    "shift") analyze_shift;;
+    "basic") analyze_basic ;;
+    "patient-type") analyze_type ;;
+    "day-of-week") analyze_day_of_week ;;
+    "shift") analyze_shift ;;
+    *) exit_script_on_failure "Command \"analyze $1\" not recognized"
   esac
 }
 
