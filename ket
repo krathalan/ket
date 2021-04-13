@@ -19,8 +19,6 @@
 # See https://vaneyckt.io/posts/safer_bash_scripts_with_set_euxo_pipefail/
 set -Eeuo pipefail
 
-trap "clean_up" EXIT
-
 # -----------------------------------------
 # ----------- Program variables -----------
 # -----------------------------------------
@@ -32,16 +30,24 @@ readonly NC=$(tput sgr0) # No color/turn off all tput attributes
 # Other
 readonly DATA_DIR="${HOME}/.local/share/ket"
 readonly DATA_FILE="${DATA_DIR}/data.json"
-readonly SCRIPT_NAME="${0##*/}"
 
 # -----------------------------------------
-# ------------- User variables ------------
+# --------------- "Library" ---------------
 # -----------------------------------------
 
-# -----------------------------------------
-# --------------- Functions ---------------
-# -----------------------------------------
+# Asks a user for a response and prints the response.
+# $1: question to print
+ask_user()
+{
+  local user_response
 
+  read -r -p "$1: " user_response
+
+  printf "%s" "${user_response}"
+}
+
+# Divides $1 by $2 and then multiplies it by 100 to get a percent.
+# Used to determine repeat rates.
 calculate_percent()
 {
   local to_return=0
@@ -54,6 +60,28 @@ calculate_percent()
   printf "%s" "${to_return}"
 }
 
+# Exits script with message with exit code 1.
+# $1: error message to print
+exit_script_on_failure()
+{
+  printf "%sError%s: %s\n" "${RED}" "${NC}" "$1" >&2
+  exit 1
+}
+
+# Prints a nice header.
+# $1: header message to print
+print_header()
+{
+  # https://stackoverflow.com/questions/5799303/print-a-character-repeatedly-in-bash#17030976
+  local -r length="${#1}"
+  printf -- "%0.s-" $(seq 1 "${length}")
+  printf -- "--------\n|   %s   |\n" "$1"
+  printf -- "%0.s-" $(seq 1 "${length}")
+  printf -- "--------\n"
+}
+
+# Adds up all values in array and prints the result.
+# $1: array to add values of
 total_array()
 {
   local running_total=0
@@ -65,6 +93,11 @@ total_array()
   printf "%s" "${running_total}"
 }
 
+# -----------------------------------------
+# --------------- Functions ---------------
+# -----------------------------------------
+
+# Used to calculate 
 # $1: data field to select, e.g "patient_type"
 # $2: data value to match, e.g. "o"
 # $3: to print, e.g. "Inpatient"
@@ -82,13 +115,15 @@ analyze_helper()
   printf "%s repeat rate: %s%% (%s / %s)\n" "$3" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${repeat_exposures}" "${total_exposures}"
 }
 
-analyze()
+# Prints basic repeat rate information
+analyze_basic()
 {
+  print_header "Basic stats"
+
   local tmparray
   local total_exposures=0
   local total_repeats=0
 
-  # Total overall repeat rate
   mapfile -t tmparray <<< "$(jq -r ".data[].total_exposures" "${DATA_FILE}")"
   total_exposures=$(total_array "${tmparray[@]}")
 
@@ -96,45 +131,87 @@ analyze()
   total_repeats=$(total_array "${tmparray[@]}")
 
   printf "Total exposures: %s\nTotal repeats: %s\nOverall repeat rate: %s%%\n" "${total_exposures}" "${total_repeats}" "$(calculate_percent "${total_repeats}" "${total_exposures}")"
-  
-  # Repeat rates per patient type
-  analyze_helper "patient_type" "i" "Inpatient"
-  analyze_helper "patient_type" "o" "Outpatient"
-  analyze_helper "patient_type" "p" "Portable"
-  
-  # Patient habitus
-  # l a h (light average heavy)
-  # t a s (tall average short)
-  # lt la ls at aa as ht ha hs
-
-  # Day of week
-
-  # Time of day
-
-  # Would like to calculate these per exam
-  # Most frequently repeated exam
-  # Least frequently repeated exam
 }
 
-ask_user()
+# Prints repeat rates per patient type
+#   e - emergency dept (not portable)
+#   i - inpatient (in x-ray room)
+#   o - outpatient (in x-ray room)
+#   p - portable (either ed or inpatient)
+analyze_type()
 {
-  local user_response
+  print_header "By patient type"
+  local prettyprint=""
+  local -r list_of_types=("e" "i" "o" "p")
 
-  read -r -p "$1: " user_response
-
-  printf "%s" "${user_response}"
+  for patient_type in "${list_of_types[@]}"; do
+    case "${patient_type}" in
+      e) prettyprint="Emergency department" ;;
+      i) prettyprint="Inpatient" ;;
+      o) prettyprint="Outpatient" ;;
+      p) prettyprint="Portable" ;;
+    esac
+    analyze_helper "patient_type" "${patient_type}" "${prettyprint}"
+  done
 }
 
-clean_up()
+# Prints repeat rates per day of the week
+analyze_day_of_week()
 {
-  if [[ -d "${TMP_DIR:-}" ]]; then
-    rm -rf "${TMP_DIR}"
+  print_header "By day of week"
+  local -r list_of_days=("Sun" "Mon" "Tues" "Wed")
+
+  for day in "${list_of_days[@]}"; do
+    analyze_helper "day_of_week" "${day}" "${day}"
+  done
+}
+
+# Prints repeat rates per shift
+#   m - morning
+#   e - evening
+#   w - weekend
+analyze_shift()
+{
+  print_header "By shift"
+  local prettyprint=""
+  local -r list_of_shifts=("m" "e" "w")
+
+  for shift_hours in "${list_of_shifts[@]}"; do
+    case "${shift_hours}" in
+      m) prettyprint="Morning shift" ;;
+      e) prettyprint="Evening shift" ;;
+      w) prettyprint="Weekend shift" ;;
+    esac
+
+    analyze_helper "shift" "${shift_hours}" "${prettyprint}"
+  done
+
+  print_header "By hour of day, for each shift"
+  local -r list_of_hours=(8 9 10 11 12 13 14 15 16 17 18 19 20 21)
+  for hour in "${list_of_hours[@]}"; do
+    analyze_helper "hour_of_day" "${hour}" "${hour}:00-${hour}:59"
+  done
+}
+
+# Performs all available analysis on saved data
+analyze()
+{
+  shift
+
+  if [[ "$#" == 0 ]] || [[ "$1" == "all" ]]; then
+    analyze_basic
+    analyze_type
+    analyze_day_of_week
+    analyze_shift
+    exit
   fi
-}
 
-make_tmp()
-{
-  readonly TMP_DIR="$(mktemp -d -t "${SCRIPT_NAME}_XXXXXXXX")"
+  case "$1" in
+    "basic") analyze_basic;;
+    "patient-type") analyze_type;;
+    "day-of-week") analyze_day_of_week;;
+    "shift") analyze_shift;;
+  esac
 }
 
 new_entry()
@@ -149,6 +226,7 @@ new_entry()
   # - autorecord date/time 
 
   # exam type
+  local shift_hours
   local exam_type
   local total_exposures
   local repeat_exposures
@@ -156,16 +234,13 @@ new_entry()
   local repeat_reasons
   local patient_type
   local patient_age
-  local patient_habitus
 
+  shift_hours="$(ask_user "Shift (m/e/w)")"
+  tech="$(ask_user "Tech you worked with")"
   exam_type="$(ask_user "Exam type")"
-
-  # total exposures
   total_exposures="$(ask_user "Total number of EXPOSURES")"
 
-  # repeat exposures
   repeat_exposures="$(ask_user "Total number of REPEATS")"
-
   # If more than 1 repeat, ask for views and reasons
   if [[ "${repeat_exposures}" -gt 0 ]]; then
     repeated_views="$(ask_user "Repeated view(s) (separated by space)")"
@@ -175,25 +250,13 @@ new_entry()
     repeat_reasons=""
   fi
 
-  # patient type
-  patient_type="$(ask_user "Patient type (i/o/p)")"
-
-  # patient type
+  patient_type="$(ask_user "Patient type (e/i/o/p)")"
   patient_age="$(ask_user "Patient age")"
-
-  # patient habitus
-  patient_habitus="$(ask_user "Weight (l/a/h) + height (t/a/s)")"
     
-  local -r tmpjson="$(jq ".data[.data | length] |= . + {\"exam_type\":\"${exam_type}\",\"total_exposures\":${total_exposures},\"repeat_exposures\":${repeat_exposures},\"repeated_views\":\"${repeated_views}\",\"repeat_reasons\":\"${repeat_reasons}\",\"patient_type\":\"${patient_type}\",\"patient_age\":${patient_age},\"patient_habitus\":\"${patient_habitus}\",\"hour_of_day\":$(date +%H),\"day_of_week\":\"$(date +%a)\",\"month\":\"$(date +%b)\",\"year\":$(date +%Y),\"week_of_year\":$(date +%U)}" "${DATA_FILE}")"
+  local -r tmpjson="$(jq ".data[.data | length] |= . + {\"tech\":\"${tech}\",\"shift\":\"${shift_hours}\",\"exam_type\":\"${exam_type}\",\"total_exposures\":${total_exposures},\"repeat_exposures\":${repeat_exposures},\"repeated_views\":\"${repeated_views}\",\"repeat_reasons\":\"${repeat_reasons}\",\"patient_type\":\"${patient_type}\",\"patient_age\":${patient_age},\"hour_of_day\":$(date +%H),\"day_of_week\":\"$(date +%a)\",\"month\":\"$(date +%b)\",\"year\":$(date +%Y),\"week_of_year\":$(date +%U)}" "${DATA_FILE}")"
   printf "%s" "${tmpjson}" > "${DATA_FILE}"
 
   printf "\nCreated exposure entry\n"
-}
-
-exit_script_on_failure()
-{
-  printf "%sError%s: %s\n" "${RED}" "${NC}" "$1" >&2
-  exit 1
 }
 
 # -----------------------------------------
@@ -210,7 +273,8 @@ exit_script_on_failure()
   printf "{\"data\": []}" > "${DATA_FILE}"
 
 case "$1" in
-  analyze) analyze;;
+  analyze) analyze "$@" ;;
+  exam) exam_info ;;
   new) new_entry ;;
   *) print_help ;;
 esac
