@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+#
+# Description: Bash completion file for ket.
+#
+# Homepage: https://github.com/krathalan/ket
+# Copyright (C) 2020-2021 Hunter Peavey
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+_ket_completions()
+{
+  # COMP_WORDS[0] = ket
+  # COMP_WORDS[1] = cmd (e.g. new, analyze, etc.)
+  # COMP_WORDS[2] = only used for analyze
+
+  if [[ "${#COMP_WORDS[@]}" -lt "3" ]]; then
+    mapfile -t COMPREPLY <<< "$(compgen -W "new analyze" "${COMP_WORDS[1]}")"
+  elif [[ "${COMP_WORDS[1]}" == "analyze" ]] && [[ "${#COMP_WORDS[@]}" -ge "3" ]]; then
+    mapfile -t COMPREPLY <<< "$(compgen -W "basic patient-type day-of-week shift" "${COMP_WORDS[2]}")"
+  fi
+}
+
+complete -F _ket_completions ket
