@@ -163,7 +163,7 @@ analyze_type()
 analyze_day_of_week()
 {
   print_header "By day of week"
-  local -r list_of_days=("Sun" "Mon" "Tues" "Wed")
+  local -r list_of_days=("Sun" "Mon" "Tue" "Wed")
 
   for day in "${list_of_days[@]}"; do
     analyze_helper "day_of_week" "${day}" "${day}"
