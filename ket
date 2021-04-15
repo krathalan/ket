@@ -170,6 +170,24 @@ analyze_day_of_week()
   done
 }
 
+analyze_equipment()
+{
+  print_header "By room/equipment"
+  local prettyprint=""
+  local -r list_of_equipment=("1" "2" "3" "n" "o")
+  
+  for equipment in "${list_of_equipment[@]}"; do
+    case "${equipment}" in
+      1) prettyprint="Room 1" ;;
+      2) prettyprint="Room 2" ;;
+      n) prettyprint="New portable" ;;
+      o) prettyprint="Old portable" ;;
+    esac
+
+    analyze_helper "equipment" "${equipment}" "${prettyprint}"
+  done
+}
+
 # Prints repeat rates per shift
 #   m - morning
 #   e - evening
@@ -228,7 +246,7 @@ analyze()
   shift
 
   if [[ "$#" == 0 ]] || [[ "$1" == "all" ]]; then
-    local -r analysis_types=("basic" "type" "day_of_week" "shift")
+    local -r analysis_types=("basic" "equipment" "type" "day_of_week" "shift")
     for analysis in "${analysis_types[@]}"; do
       analyze_"${analysis}"
       printf "\n"
@@ -238,8 +256,9 @@ analyze()
 
   case "$1" in
     "basic") analyze_basic ;;
-    "patient-type") analyze_type ;;
     "day-of-week") analyze_day_of_week ;;
+    "equipment") analyze_equipment ;;
+    "patient-type") analyze_type ;;
     "shift") analyze_shift ;;
     *) exit_script_on_failure "Command \"analyze $1\" not recognized"
   esac
@@ -264,6 +283,7 @@ new_entry()
   local repeated_views
   local repeat_reasons
   local patient_type
+  local equipment
   local patient_age
 
   shift_hours="$(ask_user "Shift (m/e/w)")"
@@ -281,10 +301,18 @@ new_entry()
     repeat_reasons=""
   fi
 
-  patient_type="$(ask_user "Patient type (e/i/o/p)")"
   patient_age="$(ask_user "Patient age")"
+  patient_type="$(ask_user "Patient type (e/i/o/p)")"
+
+  local to_ask=""
+  case "${patient_type}" in
+    e|i|o) to_ask="Room (1/2/3)" ;;
+    p) to_ask="Portable (n/o)" ;;
+  esac
+
+  equipment="$(ask_user "${to_ask}")"
     
-  local -r tmpjson="$(jq ".data[.data | length] |= . + {\"tech\":\"${tech}\",\"shift\":\"${shift_hours}\",\"exam_type\":\"${exam_type}\",\"total_exposures\":${total_exposures},\"repeat_exposures\":${repeat_exposures},\"repeated_views\":\"${repeated_views}\",\"repeat_reasons\":\"${repeat_reasons}\",\"patient_type\":\"${patient_type}\",\"patient_age\":${patient_age},\"hour_of_day\":$(date +%H),\"day_of_week\":\"$(date +%a)\",\"month\":\"$(date +%b)\",\"year\":$(date +%Y),\"week_of_year\":$(date +%U)}" "${DATA_FILE}")"
+  local -r tmpjson="$(jq ".data[.data | length] |= . + {\"tech\":\"${tech}\",\"shift\":\"${shift_hours}\",\"exam_type\":\"${exam_type}\",\"total_exposures\":${total_exposures},\"repeat_exposures\":${repeat_exposures},\"repeated_views\":\"${repeated_views}\",\"repeat_reasons\":\"${repeat_reasons}\",\"equipment\":\"${equipment}\",\"patient_type\":\"${patient_type}\",\"patient_age\":${patient_age},\"hour_of_day\":$(date +%H),\"day_of_week\":\"$(date +%a)\",\"month\":\"$(date +%b)\",\"year\":$(date +%Y),\"week_of_year\":$(date +%U)}" "${DATA_FILE}")"
   printf "%s" "${tmpjson}" > "${DATA_FILE}"
 
   printf "\nCreated exposure entry\n"
