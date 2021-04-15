@@ -163,7 +163,7 @@ analyze_type()
 analyze_day_of_week()
 {
   print_header "By day of week"
-  local -r list_of_days=("Sun" "Mon" "Tue" "Wed")
+  local -r list_of_days=("Sun" "Mon" "Tue" "Wed" "Thu" "Fri" "Sat")
 
   for day in "${list_of_days[@]}"; do
     analyze_helper "day_of_week" "${day}" "${day}"
@@ -224,9 +224,9 @@ analyze_shift()
     print_header "By hour of day, for ${prettyprint}"
 
     for hour in "${list_of_hours[@]}"; do
-      mapfile -t tmparray <<< "$(jq -r ".data[] | select(.shift == \"${shift_hours}\") | select(.hour_of_day == \"${hour}\") | .total_exposures" "${DATA_FILE}")"
+      mapfile -t tmparray <<< "$(jq -r ".data[] | select(.shift == \"${shift_hours}\") | select(.hour_of_day == ${hour}) | .total_exposures" "${DATA_FILE}")"
       total_exposures=$(total_array "${tmparray[@]}")
-      mapfile -t tmparray <<< "$(jq -r ".data[] | select(.shift == \"${shift_hours}\") | select(.hour_of_day == \"${hour}\") | .repeat_exposures" "${DATA_FILE}")"
+      mapfile -t tmparray <<< "$(jq -r ".data[] | select(.shift == \"${shift_hours}\") | select(.hour_of_day == ${hour}) | .repeat_exposures" "${DATA_FILE}")"
       repeat_exposures=$(total_array "${tmparray[@]}")
 
       if [[ "${total_exposures}" == 0 ]] && [[ "${repeat_exposures}" == 0 ]]; then
@@ -251,7 +251,7 @@ analyze()
       analyze_"${analysis}"
       printf "\n"
     done
-    exit
+    return
   fi
 
   case "$1" in
@@ -331,9 +331,19 @@ new_entry()
 [[ ! -f "${DATA_FILE}" ]] &&
   printf "{\"data\": []}" > "${DATA_FILE}"
 
+# Check for compression, uncompress if compressed
+if [[ -f "${DATA_FILE}.zst" ]]; then
+  # Back up data first
+  cp "${DATA_FILE}.zst" "${DATA_FILE}.zst.old"
+  zstd -d --rm -q -f "${DATA_FILE}.zst"
+fi
+
 case "$1" in
   analyze) analyze "$@" ;;
   exam) exam_info ;;
   new) new_entry ;;
   *) print_help ;;
 esac
+
+# Re-compress data file
+zstd --rm -q -f "${DATA_FILE}" -o "${DATA_FILE}.zst" 
