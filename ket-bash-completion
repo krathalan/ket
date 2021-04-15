@@ -15,7 +15,7 @@ _ket_completions()
   if [[ "${#COMP_WORDS[@]}" -lt "3" ]]; then
     mapfile -t COMPREPLY <<< "$(compgen -W "new analyze" "${COMP_WORDS[1]}")"
   elif [[ "${COMP_WORDS[1]}" == "analyze" ]] && [[ "${#COMP_WORDS[@]}" -ge "3" ]]; then
-    mapfile -t COMPREPLY <<< "$(compgen -W "basic patient-type day-of-week shift" "${COMP_WORDS[2]}")"
+    mapfile -t COMPREPLY <<< "$(compgen -W "basic equipment patient-type day-of-week shift" "${COMP_WORDS[2]}")"
   fi
 }
 
