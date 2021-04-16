@@ -68,6 +68,54 @@ exit_script_on_failure()
   exit 1
 }
 
+# Ensures valid input
+# $1: type of input, e.g. shift, exam, number
+# $2: input to check
+match()
+{
+  local -r valid_number_regex='^[0-9]+$'
+
+  case "$1" in
+    tech)
+        case "$2" in
+          matt|gary|julie|jeannette|mikey|jennika|christian|miguel|sylvie|henry|ayla) return 0 ;;
+          *) return 1 ;;
+        esac
+        ;;
+    exam)
+        case "$2" in
+          chest|ribs|chest-lateral-decub|sternum|upper-airway|thumb|finger|hand|wrist|forearm|elbow|humerus|shoulder|clavicle|scapula|ac-joints|toe|foot|ankle|knee|tib-fib|femur|patella|calcaneus|skull|sinuses|facial-bones|orbits|zygomatic-arches|nasal-bones|mandible|tmj|cspine|tspine|lspine|pelvis|hip|sacrum|coccyx|sacrum-coccyx|scoliosis|si-joints|abdomen|abdomen-upright|abdomen-decub|ivu|ugi|barium-enema|esophagram|sbft|cysto|ercp|myelo|arthro|hsg|c-arm|other) return 0 ;;
+          *) return 1 ;;
+        esac
+        ;;
+    equipment)
+        case "$2" in
+          1|2|3|n|o) return 0 ;;
+          *) return 1 ;;
+        esac
+        ;;
+    patient_type)
+        case "$2" in
+          e|i|o|p) return 0 ;;
+          *) return 1 ;;
+        esac
+        ;;
+    shift)
+        case "$2" in
+          m|e|w) return 0 ;;
+          *) return 1 ;;
+        esac
+        ;;
+    age|exposures|number)
+        if [[ $2 =~ $valid_number_regex ]] ; then
+          return 0
+        else
+          return 1
+        fi
+        ;;
+  esac
+}
+
 # Prints a nice header.
 # $1: header message to print
 print_header()
@@ -117,6 +165,18 @@ analyze_helper()
   fi
 
   printf "%s repeat rate: %s%% (%s / %s)\n" "$3" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${repeat_exposures}" "${total_exposures}"
+}
+
+analyze_age()
+{
+  print_header "By age bracket"
+  printf "Not yet implemented\n"
+}
+
+analyze_exam()
+{
+  print_header "By exam/view"
+  printf "Not yet implemented\n"
 }
 
 # Prints basic repeat rate information
@@ -246,7 +306,7 @@ analyze()
   shift
 
   if [[ "$#" == 0 ]] || [[ "$1" == "all" ]]; then
-    local -r analysis_types=("basic" "equipment" "type" "day_of_week" "shift")
+    local -r analysis_types=("age" "basic" "equipment" "type" "day_of_week" "shift")
     for analysis in "${analysis_types[@]}"; do
       analyze_"${analysis}"
       printf "\n"
@@ -255,12 +315,112 @@ analyze()
   fi
 
   case "$1" in
+    "age") analyze_age ;;
     "basic") analyze_basic ;;
     "day-of-week") analyze_day_of_week ;;
     "equipment") analyze_equipment ;;
+    "exam") analyze_exam ;;
     "patient-type") analyze_type ;;
     "shift") analyze_shift ;;
     *) exit_script_on_failure "Command \"analyze $1\" not recognized"
+  esac
+}
+
+# $1: what to match
+# $2: what to ask user
+new_entry_helper()
+{
+  local to_return=""
+  to_return="$(ask_user "$2")"
+
+  while ! match "$1" "${to_return}"; do
+    to_return="$(ask_user "Incorrect input. $2")"
+  done
+
+  printf "%s" "${to_return}"
+}
+
+# $1: what to match
+print_entry_help()
+{
+  printf "\n"
+  case "$1" in
+    patient_type)
+      printf "%s" "\
+  e - emergency department (not portable)
+  i - inpatient (not portable)
+  o - outpatient (not portable)
+  p - portable (inpatient or emergency dept)
+" ;;
+    equipment)
+      printf "%s" "\
+  1/2/3 - rooms 1/2/3
+  n     - new portable
+  o     - old portable
+" ;;
+    shift)
+      printf "%s" "\
+  m - morning
+  e - evening
+  w - weekend
+" ;;
+    tech)
+      printf "%s" "\
+  matt         jennika
+  gary         christian
+  julie        miguel
+  jeannette    sylvie
+  mikey        henry
+  ayla
+" ;;
+    exam)
+      printf "%s" "\
+  chest                  knee                coccyx
+  ribs                   tib-fib             sacrum-coccyx
+  chest-lateral-decub    femur               scoliosis
+  sternum                patella             si-joints
+  upper-airway           calcaneus           abdomen
+  thumb                  skull               abdomen-upright
+  finger                 sinuses             abdomen-decub
+  hand                   facial-bones        ivu
+  wrist                  orbits              ugi
+  forearm                zygomatic-arches    barium-enema
+  elbow                  nasal-bones         esophagram
+  humerus                mandible            sbft
+  shoulder               tmj                 cysto
+  clavicle               cspine              ercp
+  scapula                tspine              myelo
+  ac-joints              lspine              arthro
+  toe                    pelvis              hsg
+  foot                   hip                 c-arm
+  ankle                  sacrum              other
+" ;;
+    repeated_views)
+      printf "%s" "\
+  ap                     ap-oblique
+  pa                     pa-oblique
+  lateral                grashey
+  oblique                axillary
+  internal-oblique       sunrise
+  external-oblique       flexion
+  decubitus              extension
+  left-lateral-decub     fuchs
+  right-lateral-decub    other
+  frog
+" ;;
+    repeat_reasons)
+      printf "%s" "\
+  centering-left     underexposed
+  centering-right    overexposed
+  centering-high     equipment-error
+  centering-low      other-positioning
+  aec-sid            other-equipment
+  artifact           other
+  rotation
+  tilt
+  anatomy-cutoff
+" ;;
+    *) ;;
   esac
 }
 
@@ -286,31 +446,41 @@ new_entry()
   local equipment
   local patient_age
 
-  shift_hours="$(ask_user "Shift (m/e/w)")"
-  tech="$(ask_user "Tech you worked with")"
-  exam_type="$(ask_user "Exam type")"
-  total_exposures="$(ask_user "Total number of EXPOSURES")"
+  print_entry_help "shift"
+  shift_hours="$(new_entry_helper "shift" "Shift")"
+  print_entry_help "tech"
+  tech="$(new_entry_helper "tech" "Tech you worked with")"
+  print_entry_help "exam"
+  exam_type="$(new_entry_helper "exam" "Exam type")"
+  printf "\n"
+  total_exposures="$(new_entry_helper "number" "Total number of EXPOSURES")"
 
-  repeat_exposures="$(ask_user "Total number of REPEATS")"
+  printf "\n"
+  repeat_exposures="$(new_entry_helper "number" "Total number of REPEATS")"
   # If more than 1 repeat, ask for views and reasons
   if [[ "${repeat_exposures}" -gt 0 ]]; then
-    repeated_views="$(ask_user "Repeated view(s) (separated by space)")"
-    repeat_reasons="$(ask_user "Repeat reason(s)")"
+    print_entry_help "repeated_views"
+    repeated_views="$(new_entry_helper "repeated_views" "Repeated view(s)")"
+    print_entry_help "repeat_reasons"
+    repeat_reasons="$(new_entry_helper "repeat_reasons" "Repeat reason(s)")"
   else
     repeated_views=""
     repeat_reasons=""
   fi
 
-  patient_age="$(ask_user "Patient age")"
-  patient_type="$(ask_user "Patient type (e/i/o/p)")"
+  printf "\n"
+  patient_age="$(new_entry_helper "number" "Patient age")"
+  print_entry_help "patient_type"
+  patient_type="$(new_entry_helper "patient_type" "Patient type")"
 
   local to_ask=""
   case "${patient_type}" in
-    e|i|o) to_ask="Room (1/2/3)" ;;
-    p) to_ask="Portable (n/o)" ;;
+    e|i|o) to_ask="Room" ;;
+    p) to_ask="Portable" ;;
   esac
 
-  equipment="$(ask_user "${to_ask}")"
+  print_entry_help "equipment"
+  equipment="$(new_entry_helper "equipment" "${to_ask}")"
     
   local -r tmpjson="$(jq ".data[.data | length] |= . + {\"tech\":\"${tech}\",\"shift\":\"${shift_hours}\",\"exam_type\":\"${exam_type}\",\"total_exposures\":${total_exposures},\"repeat_exposures\":${repeat_exposures},\"repeated_views\":\"${repeated_views}\",\"repeat_reasons\":\"${repeat_reasons}\",\"equipment\":\"${equipment}\",\"patient_type\":\"${patient_type}\",\"patient_age\":${patient_age},\"hour_of_day\":$(date +%H),\"day_of_week\":\"$(date +%a)\",\"month\":\"$(date +%b)\",\"year\":$(date +%Y),\"week_of_year\":$(date +%U)}" "${DATA_FILE}")"
   printf "%s" "${tmpjson}" > "${DATA_FILE}"
