@@ -445,10 +445,10 @@ print_entry_help()
   centering-right    overexposed
   centering-high     equipment-error
   centering-low      other-positioning
-  aec-sid            other-equipment
-  artifact           other
-  rotation
-  tilt
+  aec-sid            overrotated
+  artifact           underrotated
+  rotation           other-equipment
+  tilt               other
   anatomy-cutoff
 " ;;
     *) ;;
