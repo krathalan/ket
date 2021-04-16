@@ -173,12 +173,6 @@ analyze_age()
   printf "Not yet implemented\n"
 }
 
-analyze_exam()
-{
-  print_header "By exam/view"
-  printf "Not yet implemented\n"
-}
-
 # Prints basic repeat rate information
 analyze_basic()
 {
@@ -197,28 +191,6 @@ analyze_basic()
   printf "Total exposures: %s\nTotal repeats: %s\nOverall repeat rate: %s%%\n" "${total_exposures}" "${total_repeats}" "$(calculate_percent "${total_repeats}" "${total_exposures}")"
 }
 
-# Prints repeat rates per patient type
-#   e - emergency dept (not portable)
-#   i - inpatient (in x-ray room)
-#   o - outpatient (in x-ray room)
-#   p - portable (either ed or inpatient)
-analyze_type()
-{
-  print_header "By patient type"
-  local prettyprint=""
-  local -r list_of_types=("e" "i" "o" "p")
-
-  for patient_type in "${list_of_types[@]}"; do
-    case "${patient_type}" in
-      e) prettyprint="Emergency department" ;;
-      i) prettyprint="Inpatient" ;;
-      o) prettyprint="Outpatient" ;;
-      p) prettyprint="Portable" ;;
-    esac
-    analyze_helper "patient_type" "${patient_type}" "${prettyprint}"
-  done
-}
-
 # Prints repeat rates per day of the week
 analyze_day_of_week()
 {
@@ -230,6 +202,7 @@ analyze_day_of_week()
   done
 }
 
+# Prints repeat rates per room/portable used
 analyze_equipment()
 {
   print_header "By room/equipment"
@@ -240,11 +213,23 @@ analyze_equipment()
     case "${equipment}" in
       1) prettyprint="Room 1" ;;
       2) prettyprint="Room 2" ;;
+      3) prettyprint="Room 3" ;;
       n) prettyprint="New portable" ;;
       o) prettyprint="Old portable" ;;
     esac
 
     analyze_helper "equipment" "${equipment}" "${prettyprint}"
+  done
+}
+
+# Prints repeat rates per exam type
+analyze_exam()
+{
+  print_header "By exam type"
+  local -r list_of_exams=("chest" "ribs" "chest-lateral-decub" "sternum" "upper-airway" "thumb" "finger" "hand" "wrist" "forearm" "elbow" "humerus" "shoulder" "clavicle" "scapula" "ac-joints" "toe" "foot" "ankle" "knee" "tib-fib" "femur" "patella" "calcaneus" "skull" "sinuses" "facial-bones" "orbits" "zygomatic-arches" "nasal-bones" "mandible" "tmj" "cspine" "tspine" "lspine" "pelvis" "hip" "sacrum" "coccyx" "sacrum-coccyx" "scoliosis" "si-joints" "abdomen" "abdomen-upright" "abdomen-decub" "ivu" "ugi" "barium-enema" "esophagram" "sbft" "cysto" "ercp" "myelo" "arthro" "hsg" "c-arm" "other")
+
+  for exam in "${list_of_exams[@]}"; do
+    analyze_helper "exam_type" "${exam}" "${exam}"
   done
 }
 
@@ -300,13 +285,42 @@ analyze_shift()
   done
 }
 
+# Prints repeat rates per registered tech
+analyze_tech()
+{
+  print_header "By registered tech"
+  local -r list_of_techs=("matt" "gary" "julie" "jeannette" "mikey" "jennika" "christian" "miguel" "sylvie" "henry" "ayla")
+
+  for tech in "${list_of_techs[@]}"; do
+    analyze_helper "tech" "${tech}" "${tech}"
+  done
+}
+
+# Prints repeat rates per patient type
+analyze_type()
+{
+  print_header "By patient type"
+  local prettyprint=""
+  local -r list_of_types=("e" "i" "o" "p")
+
+  for patient_type in "${list_of_types[@]}"; do
+    case "${patient_type}" in
+      e) prettyprint="Emergency department" ;;
+      i) prettyprint="Inpatient" ;;
+      o) prettyprint="Outpatient" ;;
+      p) prettyprint="Portable" ;;
+    esac
+    analyze_helper "patient_type" "${patient_type}" "${prettyprint}"
+  done
+}
+
 # Performs all available analysis on saved data
 analyze()
 {
   shift
 
   if [[ "$#" == 0 ]] || [[ "$1" == "all" ]]; then
-    local -r analysis_types=("age" "basic" "equipment" "type" "day_of_week" "shift")
+    local -r analysis_types=("age" "basic" "day_of_week" "equipment" "exam" "shift" "tech" "type")
     for analysis in "${analysis_types[@]}"; do
       analyze_"${analysis}"
       printf "\n"
@@ -320,12 +334,14 @@ analyze()
     "day-of-week") analyze_day_of_week ;;
     "equipment") analyze_equipment ;;
     "exam") analyze_exam ;;
+    "tech") analyze_tech ;;
     "patient-type") analyze_type ;;
     "shift") analyze_shift ;;
     *) exit_script_on_failure "Command \"analyze $1\" not recognized"
   esac
 }
 
+# Helps new_entry ask for input repeatedly
 # $1: what to match
 # $2: what to ask user
 new_entry_helper()
@@ -340,6 +356,7 @@ new_entry_helper()
   printf "%s" "${to_return}"
 }
 
+# Prints valid input values for the user to input
 # $1: what to match
 print_entry_help()
 {
@@ -426,16 +443,6 @@ print_entry_help()
 
 new_entry()
 {
-  # We need:
-  # - exam type (chest, lumbar, etc)
-  # - total exposure # (including repeats)
-  # - repeat exposure #
-  # - repeat reason(s)
-  # - patient type (in/out/port)
-  # - patient habitus (light/average/heavy, tall/average/short)
-  # - autorecord date/time 
-
-  # exam type
   local shift_hours
   local exam_type
   local total_exposures
