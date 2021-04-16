@@ -28,8 +28,14 @@ readonly RED=$(tput bold && tput setaf 1)
 readonly NC=$(tput sgr0) # No color/turn off all tput attributes
 
 # Other
+readonly TMP_DIR="$(mktemp -d -t "ket_XXXXXXXX")"
+readonly DATA_FILE="${TMP_DIR}/data.json"
+
 readonly DATA_DIR="${HOME}/.local/share/ket"
-readonly DATA_FILE="${DATA_DIR}/data.json"
+readonly DATA_FILE_PERM="${DATA_DIR}/data.json.zst"
+
+# Clean up tmp dir always on exit
+trap "clean_up" EXIT
 
 # -----------------------------------------
 # --------------- "Library" ---------------
@@ -58,6 +64,14 @@ calculate_percent()
   fi
 
   printf "%s" "${to_return}"
+}
+
+# Deletes tmp dir if exists
+clean_up()
+{
+  if [[ -d "${TMP_DIR}" ]]; then
+    rm -rf "${TMP_DIR}"
+  fi
 }
 
 # Exits script with message with exit code 1.
@@ -505,14 +519,15 @@ new_entry()
 [[ ! -d "${DATA_DIR}" ]] &&
   mkdir -p "${DATA_DIR}"
 
-[[ ! -f "${DATA_FILE}" ]] &&
+# Create data file if not exists
+if [[ ! -f "${DATA_FILE_PERM}" ]]; then
   printf "{\"data\": []}" > "${DATA_FILE}"
-
-# Check for compression, uncompress if compressed
-if [[ -f "${DATA_FILE}.zst" ]]; then
+  zstd -z -q -f "${DATA_FILE}" -o "${DATA_FILE_PERM}"
+elif [[ -f "${DATA_FILE_PERM}" ]]; then
+  # If data file already exists, check for compression, uncompress if compressed
   # Back up data first
-  cp "${DATA_FILE}.zst" "${DATA_FILE}.zst.old"
-  zstd -d --rm -q -f "${DATA_FILE}.zst"
+  cp "${DATA_FILE_PERM}" "${DATA_FILE_PERM}.old"
+  zstd -d -q "${DATA_FILE_PERM}" -o "${DATA_FILE}"
 fi
 
 case "$1" in
@@ -523,4 +538,4 @@ case "$1" in
 esac
 
 # Re-compress data file
-zstd --rm -q -f "${DATA_FILE}" -o "${DATA_FILE}.zst" 
+zstd -z -q -f "${DATA_FILE}" -o "${DATA_FILE_PERM}" 
