@@ -530,9 +530,12 @@ elif [[ -f "${DATA_FILE_PERM}" ]]; then
   zstd -d -q "${DATA_FILE_PERM}" -o "${DATA_FILE}"
 fi
 
+if [[ -z "${1:-}" ]]; then
+  exit_script_on_failure "Please give a command (e.g. ket new, ket analyze)."
+fi
+
 case "$1" in
   analyze) analyze "$@" ;;
-  exam) exam_info ;;
   new) new_entry ;;
   *) print_help ;;
 esac
