@@ -30,6 +30,8 @@ readonly NC=$(tput sgr0) # No color/turn off all tput attributes
 # Other
 readonly TMP_DIR="$(mktemp -d -t "ket_XXXXXXXX")"
 readonly DATA_FILE="${TMP_DIR}/data.json"
+readonly TMP_JSON="${TMP_DIR}/tmp.json"
+readonly TMP_OUTPUT="${TMP_DIR}/output.txt"
 
 readonly DATA_DIR="${HOME}/.local/share/ket"
 readonly DATA_FILE_PERM="${DATA_DIR}/data.json.zst"
@@ -303,7 +305,7 @@ analyze_shift()
 analyze_tech()
 {
   print_header "By registered tech"
-  local -r list_of_techs=("matt" "gary" "julie" "jeannette" "mikey" "jennika" "christian" "miguel" "sylvie" "henry" "ayla")
+  local -r list_of_techs=("matt" "gary" "julie" "jeannette" "mikey" "jennika" "christian" "miguel" "sylvie" "henry" "ayla" "nate")
 
   for tech in "${list_of_techs[@]}"; do
     analyze_helper "tech" "${tech}" "${tech}"
@@ -455,6 +457,96 @@ print_entry_help()
   esac
 }
 
+# Pretty prints all the exposure entries from today
+show_today()
+{
+  local -r day_of_week="$(date +%a)"
+  local -r week_of_year="$(date +%U)"
+
+  jq -r ".data[] | select(.day_of_week == \"${day_of_week}\") | select(.week_of_year == ${week_of_year})" "${DATA_FILE}" | jq -s > "${TMP_JSON}"
+
+  local json_index=0
+  local json_parser
+  json_parser="$(jq -r .[${json_index}] "${TMP_JSON}")"
+
+  local alldata
+
+  while [[ "${json_parser}" != "null" ]]; do
+    show_today_helper "$(( json_index + 1 ))" "${json_parser}" &
+
+    json_index=$(( json_index + 1 ))
+    json_parser="$(jq -r .[${json_index}] "${TMP_JSON}")"
+  done
+
+  wait
+
+  sort -n "${TMP_OUTPUT}"
+
+  # Get total and repeat exposures for today only
+  local to_add
+  mapfile -t to_add <<< "$(jq -r ".[].total_exposures" "${TMP_JSON}")"
+  local -r total_exposures="$(total_array "${to_add[@]}")"
+  mapfile -t to_add <<< "$(jq -r ".[].repeat_exposures" "${TMP_JSON}")"
+  local -r repeat_exposures="$(total_array "${to_add[@]}")"
+
+  printf "\nToday's overall repeat rate: %s%% (%sE/%sR)\n" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${total_exposures}" "${repeat_exposures}"
+}
+
+# Extracts json data to help show_today go faster; prints to $TMP_OUTPUT
+# $1: index to print
+# $2: json data
+show_today_helper()
+{
+  local alldata
+  mapfile -t alldata <<< "$(jq -r ".tech, .exam_type, .total_exposures, .repeat_exposures, .equipment, .patient_type, .patient_age, .exact_time" <<< "$2")"
+
+  # 0 tech
+  # 1 exam type
+  # 2 total exposures
+  # 3 repeat exppsures
+  # 4 equipment
+  # 5 patient type
+  # 6 patient age
+  # 7 exact time
+
+  printf "%s. (%s) [%sE/%sR] %s y/o %s with %s, %s\n" "$1" "${alldata[7]}" "${alldata[2]}" "${alldata[3]}" "${alldata[6]}" "${alldata[1]}" "${alldata[0]}" "$(format_equipment_patient "${alldata[4]}" "${alldata[5]}")" >> "${TMP_OUTPUT}"
+}
+
+# Pretty prints a patient type/equipment combo
+# $1: equipment (1/2/3/n/o)
+# $2: patient type (e/i/o/p)
+format_equipment_patient()
+{
+  local to_print=""
+
+  case "$2" in
+    e)
+      to_print+="ED"
+      ;;
+    i)
+      to_print+="inpatient"
+      ;;
+    o)
+      to_print+="outpatient"
+      ;;
+    p)
+      to_print+="portable"
+      ;;
+  esac
+
+  case "$2" in
+    e|i|o)
+      to_print+=" in room $1"
+      ;;
+    p)
+      to_print+=" ($1)"
+      ;;
+  esac
+
+  printf "%s" "${to_print}"
+}
+
+# Adds a new exposure entry to data.json
 new_entry()
 {
   local shift_hours
@@ -503,7 +595,7 @@ new_entry()
   print_entry_help "equipment"
   equipment="$(new_entry_helper "equipment" "${to_ask}")"
 
-  local -r tmpjson="$(jq ".data[.data | length] |= . + {\"tech\":\"${tech}\",\"shift\":\"${shift_hours}\",\"exam_type\":\"${exam_type}\",\"total_exposures\":${total_exposures},\"repeat_exposures\":${repeat_exposures},\"repeated_views\":\"${repeated_views}\",\"repeat_reasons\":\"${repeat_reasons}\",\"equipment\":\"${equipment}\",\"patient_type\":\"${patient_type}\",\"patient_age\":${patient_age},\"hour_of_day\":$(date +%H),\"day_of_week\":\"$(date +%a)\",\"month\":\"$(date +%b)\",\"year\":$(date +%Y),\"week_of_year\":$(date +%U)}" "${DATA_FILE}")"
+  local -r tmpjson="$(jq ".data[.data | length] |= . + {\"tech\":\"${tech}\",\"shift\":\"${shift_hours}\",\"exam_type\":\"${exam_type}\",\"total_exposures\":${total_exposures},\"repeat_exposures\":${repeat_exposures},\"repeated_views\":\"${repeated_views}\",\"repeat_reasons\":\"${repeat_reasons}\",\"equipment\":\"${equipment}\",\"patient_type\":\"${patient_type}\",\"patient_age\":${patient_age},\"hour_of_day\":$(date +%H),\"day_of_week\":\"$(date +%a)\",\"month\":\"$(date +%b)\",\"year\":$(date +%Y),\"exact_time\":\"$(date "+%H:%M:%S")\",\"week_of_year\":$(date +%U)}" "${DATA_FILE}")"
   printf "%s" "${tmpjson}" > "${DATA_FILE}"
 
   printf "\nCreated exposure entry\n"
@@ -537,6 +629,7 @@ fi
 case "$1" in
   analyze) analyze "$@" ;;
   new) new_entry ;;
+  today) show_today ;;
   *) print_help ;;
 esac
 
