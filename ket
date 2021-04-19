@@ -92,7 +92,7 @@ match()
   case "$1" in
     tech)
         case "$2" in
-          matt|gary|julie|jeannette|mikey|jennika|christian|miguel|sylvie|henry|ayla) return 0 ;;
+          matt|gary|julie|jeannette|mikey|jennika|christian|miguel|sylvie|henry|ayla|nate) return 0 ;;
           *) return 1 ;;
         esac
         ;;
@@ -159,7 +159,7 @@ total_array()
 # --------------- Functions ---------------
 # -----------------------------------------
 
-# Used to calculate 
+# Used to calculate
 # $1: data field to select, e.g "patient_type"
 # $2: data value to match, e.g. "o"
 # $3: to print, e.g. "Inpatient"
@@ -222,7 +222,7 @@ analyze_equipment()
   print_header "By room/equipment"
   local prettyprint=""
   local -r list_of_equipment=("1" "2" "3" "n" "o")
-  
+
   for equipment in "${list_of_equipment[@]}"; do
     case "${equipment}" in
       1) prettyprint="Room 1" ;;
@@ -402,7 +402,7 @@ print_entry_help()
   julie        miguel
   jeannette    sylvie
   mikey        henry
-  ayla
+  ayla         nate
 " ;;
     exam)
       printf "%s" "\
@@ -502,7 +502,7 @@ new_entry()
 
   print_entry_help "equipment"
   equipment="$(new_entry_helper "equipment" "${to_ask}")"
-    
+
   local -r tmpjson="$(jq ".data[.data | length] |= . + {\"tech\":\"${tech}\",\"shift\":\"${shift_hours}\",\"exam_type\":\"${exam_type}\",\"total_exposures\":${total_exposures},\"repeat_exposures\":${repeat_exposures},\"repeated_views\":\"${repeated_views}\",\"repeat_reasons\":\"${repeat_reasons}\",\"equipment\":\"${equipment}\",\"patient_type\":\"${patient_type}\",\"patient_age\":${patient_age},\"hour_of_day\":$(date +%H),\"day_of_week\":\"$(date +%a)\",\"month\":\"$(date +%b)\",\"year\":$(date +%Y),\"week_of_year\":$(date +%U)}" "${DATA_FILE}")"
   printf "%s" "${tmpjson}" > "${DATA_FILE}"
 
@@ -541,4 +541,4 @@ case "$1" in
 esac
 
 # Re-compress data file
-zstd -z -q -f "${DATA_FILE}" -o "${DATA_FILE_PERM}" 
+zstd -z -q -f "${DATA_FILE}" -o "${DATA_FILE_PERM}"
