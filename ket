@@ -62,7 +62,7 @@ calculate_percent()
 
   if [[ $2 != 0 ]]; then
     to_return="$(awk "BEGIN{print $1/$2}")"
-    to_return="$(awk "BEGIN{print ${to_return}*100}")"
+    to_return="$(awk -v OFMT="%5.2f" "BEGIN{print ${to_return}*100}")"
   fi
 
   printf "%s" "${to_return}"
