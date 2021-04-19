@@ -180,7 +180,7 @@ analyze_helper()
     return
   fi
 
-  printf "%s repeat rate: %s%% (%s / %s)\n" "$3" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${repeat_exposures}" "${total_exposures}"
+  printf "%s rate: %s%% (%sR/%sE)\n" "$3" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${repeat_exposures}" "${total_exposures}"
 }
 
 analyze_age()
@@ -489,7 +489,7 @@ show_today()
   mapfile -t to_add <<< "$(jq -r ".[].repeat_exposures" "${TMP_JSON}")"
   local -r repeat_exposures="$(total_array "${to_add[@]}")"
 
-  printf "\nToday's overall repeat rate: %s%% (%sE/%sR)\n" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${total_exposures}" "${repeat_exposures}"
+  printf "\nToday's overall repeat rate: %s%% (%sR/%sE)\n" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${repeat_exposures}" "${total_exposures}"
 }
 
 # Extracts json data to help show_today go faster; prints to $TMP_OUTPUT
