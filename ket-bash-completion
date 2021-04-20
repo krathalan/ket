@@ -13,7 +13,7 @@ _ket_completions()
   # COMP_WORDS[2] = only used for analyze
 
   if [[ "${#COMP_WORDS[@]}" -lt "3" ]]; then
-    mapfile -t COMPREPLY <<< "$(compgen -W "new analyze today" "${COMP_WORDS[1]}")"
+    mapfile -t COMPREPLY <<< "$(compgen -W "new analyze today delete-last" "${COMP_WORDS[1]}")"
   elif [[ "${COMP_WORDS[1]}" == "analyze" ]] && [[ "${#COMP_WORDS[@]}" -ge "3" ]]; then
     mapfile -t COMPREPLY <<< "$(compgen -W "age basic day-of-week equipment exam patient-type shift tech" "${COMP_WORDS[2]}")"
   fi

@@ -62,7 +62,7 @@ calculate_percent()
 
   if [[ $2 != 0 ]]; then
     to_return="$(awk "BEGIN{print $1/$2}")"
-    to_return="$(awk -v OFMT="%5.2f" "BEGIN{print ${to_return}*100}")"
+    to_return="$(awk -v OFMT="%.2f" "BEGIN{print ${to_return}*100}")"
   fi
 
   printf "%s" "${to_return}"
@@ -161,7 +161,7 @@ total_array()
 # --------------- Functions ---------------
 # -----------------------------------------
 
-# Used to calculate
+# Used to generically calculate repeat rates
 # $1: data field to select, e.g "patient_type"
 # $2: data value to match, e.g. "o"
 # $3: to print, e.g. "Inpatient"
@@ -183,10 +183,25 @@ analyze_helper()
   printf "%s rate: %s%% (%sR/%sE)\n" "$3" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${repeat_exposures}" "${total_exposures}"
 }
 
+# Prints repeat rates per age bracket
 analyze_age()
 {
   print_header "By age bracket"
-  printf "Not yet implemented\n"
+  local range_low=1
+  local range_high=10
+
+  while [[ "${range_high}" -lt 120 ]]; do
+    mapfile -t tmparray <<< "$(jq -r ".data[] | select(.patient_age <= ${range_high}) | select(.patient_age >= ${range_low}).total_exposures" "${DATA_FILE}")"
+    total_exposures=$(total_array "${tmparray[@]}")
+    mapfile -t tmparray <<< "$(jq -r ".data[] | select(.patient_age >= ${range_low}) | select(.patient_age <= ${range_high}).repeat_exposures" "${DATA_FILE}")"
+    repeat_exposures=$(total_array "${tmparray[@]}")
+
+    printf "%s rate: %s%% (%sE/%sR)\n" "${range_low}-${range_high}" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${total_exposures}" "${repeat_exposures}"
+
+    # Increase age range bracket
+    range_low=$(( range_low + 10 ))
+    range_high=$(( range_high + 10 ))
+  done
 }
 
 # Prints basic repeat rate information
@@ -438,8 +453,8 @@ print_entry_help()
   external-oblique       flexion
   decubitus              extension
   left-lateral-decub     fuchs
-  right-lateral-decub    other
-  frog
+  right-lateral-decub    swimmers
+  frog                   other
 " ;;
     repeat_reasons)
       printf "%s" "\
@@ -449,9 +464,11 @@ print_entry_help()
   centering-low      other-positioning
   aec-sid            overrotated
   artifact           underrotated
-  rotation           other-equipment
-  tilt               other
-  anatomy-cutoff
+  rotation           wrong-sid
+  tilt               other-equipment
+  anatomy-cutoff     other
+  marker-in-anatomy
+  wrong-marker
 " ;;
     *) ;;
   esac
@@ -503,7 +520,7 @@ show_today_helper()
   # 0 tech
   # 1 exam type
   # 2 total exposures
-  # 3 repeat exppsures
+  # 3 repeat exposures
   # 4 equipment
   # 5 patient type
   # 6 patient age
@@ -544,6 +561,20 @@ format_equipment_patient()
   esac
 
   printf "%s" "${to_print}"
+}
+
+# Deletes the last exposure entry in the data file.
+delete_last_entry()
+{
+  # Get index of last element
+  local index_to_delete
+  index_to_delete="$(jq -r ".data | length" "${DATA_FILE}")"
+  index_to_delete=$(( index_to_delete - 1 ))
+
+  local -r tmpjson="$(jq -r "del(.data[${index_to_delete}])" "${DATA_FILE}")"
+  printf "%s" "${tmpjson}" > "${DATA_FILE}"
+
+  printf "\nDeleted last entry.\n"
 }
 
 # Adds a new exposure entry to data.json
@@ -598,7 +629,8 @@ new_entry()
   local -r tmpjson="$(jq ".data[.data | length] |= . + {\"tech\":\"${tech}\",\"shift\":\"${shift_hours}\",\"exam_type\":\"${exam_type}\",\"total_exposures\":${total_exposures},\"repeat_exposures\":${repeat_exposures},\"repeated_views\":\"${repeated_views}\",\"repeat_reasons\":\"${repeat_reasons}\",\"equipment\":\"${equipment}\",\"patient_type\":\"${patient_type}\",\"patient_age\":${patient_age},\"hour_of_day\":$(date +%H),\"day_of_week\":\"$(date +%a)\",\"month\":\"$(date +%b)\",\"year\":$(date +%Y),\"exact_time\":\"$(date "+%H:%M:%S")\",\"week_of_year\":$(date +%U)}" "${DATA_FILE}")"
   printf "%s" "${tmpjson}" > "${DATA_FILE}"
 
-  printf "\nCreated exposure entry\n"
+  printf "\nCreated exposure entry:"
+  printf "\n(%s) [%sE/%sR] %s y/o %s with %s, %s\n" "$(date "+%H:%M:%S")" "${total_exposures}" "${repeat_exposures}" "${patient_age}" "${exam_type}" "${tech}" "$(format_equipment_patient "${equipment}" "${patient_type}")"
 }
 
 # -----------------------------------------
@@ -630,6 +662,7 @@ case "$1" in
   analyze) analyze "$@" ;;
   new) new_entry ;;
   today) show_today ;;
+  delete-last) delete_last_entry ;;
   *) print_help ;;
 esac
 
