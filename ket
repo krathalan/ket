@@ -147,6 +147,21 @@ print_header()
   printf -- "--------\n"
 }
 
+print_help()
+{
+  printf "%s" "\
+ket - Krathalan's exposure tracker
+
+Track your repeated exposures and figure out why you are
+repeating the projections you're repeating.
+
+Commands:
+  $ ket new - enter a new exam you just did
+  $ ket today - display all exams from today
+  $ ket analyze - analyze all entered exams
+"
+}
+
 # Adds up all values in array and prints the result.
 # $1: array to add values of
 total_array()
@@ -658,7 +673,7 @@ elif [[ -f "${DATA_FILE_PERM}" ]]; then
 fi
 
 if [[ -z "${1:-}" ]]; then
-  exit_script_on_failure "Please give a command (e.g. ket new, ket analyze)."
+  exit_script_on_failure "Please give a command (e.g. ket help, ket new)."
 fi
 
 case "$1" in
@@ -666,7 +681,8 @@ case "$1" in
   new) new_entry ;;
   today) show_today ;;
   delete-last) delete_last_entry ;;
-  *) print_help ;;
+  help) print_help ;;
+  *) exit_script_on_failure "Please enter a valid command."
 esac
 
 # Re-compress data file
