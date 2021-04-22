@@ -24,11 +24,14 @@ set -Eeuo pipefail
 # -----------------------------------------
 
 # Colors
-readonly RED=$(tput bold && tput setaf 1)
-readonly NC=$(tput sgr0) # No color/turn off all tput attributes
+RED=$(tput bold && tput setaf 1)
+readonly RED
+NC=$(tput sgr0) # No color/turn off all tput attributes
+readonly NC
 
 # Other
-readonly TMP_DIR="$(mktemp -d -t "ket_XXXXXXXX")"
+TMP_DIR="$(mktemp -d -t "ket_XXXXXXXX")"
+readonly TMP_DIR
 readonly DATA_FILE="${TMP_DIR}/data.json"
 readonly TMP_JSON="${TMP_DIR}/tmp.json"
 readonly TMP_OUTPUT="${TMP_DIR}/output.txt"
@@ -387,7 +390,7 @@ new_entry_helper()
   printf "%s" "${to_return}"
 }
 
-# Prints valid input values for the user to input
+# Prints valid/suggested input values for the user
 # $1: what to match
 print_entry_help()
 {
@@ -480,13 +483,12 @@ show_today()
   local -r day_of_week="$(date +%a)"
   local -r week_of_year="$(date +%U)"
 
+  # Filter entries to correct day of week and week of year, then output it as an array in a tmp file
   jq -r ".data[] | select(.day_of_week == \"${day_of_week}\") | select(.week_of_year == ${week_of_year})" "${DATA_FILE}" | jq -s > "${TMP_JSON}"
 
   local json_index=0
   local json_parser
   json_parser="$(jq -r .[${json_index}] "${TMP_JSON}")"
-
-  local alldata
 
   while [[ "${json_parser}" != "null" ]]; do
     show_today_helper "$(( json_index + 1 ))" "${json_parser}" &
@@ -495,6 +497,7 @@ show_today()
     json_parser="$(jq -r .[${json_index}] "${TMP_JSON}")"
   done
 
+  # Wait for all "show_today_helper ... &"s to finish
   wait
 
   sort -n "${TMP_OUTPUT}"
