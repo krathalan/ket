@@ -37,7 +37,7 @@ readonly TMP_JSON="${TMP_DIR}/tmp.json"
 readonly TMP_OUTPUT="${TMP_DIR}/output.txt"
 
 readonly DATA_DIR="${HOME}/.local/share/ket"
-readonly DATA_FILE_PERM="${DATA_DIR}/data.json.zst"
+readonly DATA_FILE_PERM="${DATA_DIR}/data.json.br"
 
 # Clean up tmp dir always on exit
 trap "clean_up" EXIT
@@ -664,12 +664,12 @@ new_entry()
 # Create data file if not exists
 if [[ ! -f "${DATA_FILE_PERM}" ]]; then
   printf "{\"data\": []}" > "${DATA_FILE}"
-  zstd -z -q -f "${DATA_FILE}" -o "${DATA_FILE_PERM}"
+  brotli -q 7 -f "${DATA_FILE}" -o "${DATA_FILE_PERM}"
 elif [[ -f "${DATA_FILE_PERM}" ]]; then
   # If data file already exists, check for compression, uncompress if compressed
   # Back up data first
   cp "${DATA_FILE_PERM}" "${DATA_FILE_PERM}.old"
-  zstd -d -q "${DATA_FILE_PERM}" -o "${DATA_FILE}"
+  brotli -d "${DATA_FILE_PERM}" -o "${DATA_FILE}"
 fi
 
 if [[ -z "${1:-}" ]]; then
@@ -686,4 +686,4 @@ case "$1" in
 esac
 
 # Re-compress data file
-zstd -z -q -f "${DATA_FILE}" -o "${DATA_FILE_PERM}"
+brotli -q 7 -f "${DATA_FILE}" -o "${DATA_FILE_PERM}"
