@@ -103,7 +103,7 @@ match()
         ;;
     exam)
         case "$2" in
-          chest|ribs|chest-lateral-decub|sternum|upper-airway|thumb|finger|hand|wrist|forearm|elbow|humerus|shoulder|clavicle|scapula|ac-joints|toe|foot|ankle|knee|tib-fib|femur|patella|calcaneus|skull|sinuses|facial-bones|orbits|zygomatic-arches|nasal-bones|mandible|tmj|cspine|tspine|lspine|pelvis|hip|sacrum|coccyx|sacrum-coccyx|scoliosis|si-joints|abdomen|abdomen-upright|abdomen-decub|ivu|ugi|barium-enema|esophagram|sbft|cysto|ercp|myelo|arthro|hsg|c-arm|other) return 0 ;;
+          chest|ribs|chest-lateral-decub|sternum|upper-airway|thumb|finger|hand|wrist|forearm|elbow|humerus|shoulder|clavicle|scapula|ac-joints|toe|foot|ankle|knee|tib-fib|femur|patella|calcaneus|skull|sinuses|facial-bones|orbits|zygomatic-arches|nasal-bones|mandible|tmj|cspine|tspine|lspine|pelvis|hip|sacrum|coccyx|sacrum-coccyx|scoliosis|si-joints|abdomen|abdomen-upright|abdomen-decub|ivu|ugi|barium-enema|esophagram|sbft|cysto|ercp|myelo|arthro|hsg|c-arm|bone-survey|other) return 0 ;;
           *) return 1 ;;
         esac
         ;;
@@ -459,7 +459,8 @@ print_entry_help()
   ac-joints              lspine              arthro
   toe                    pelvis              hsg
   foot                   hip                 c-arm
-  ankle                  sacrum              other
+  ankle                  sacrum              bone-survey
+  other
 " ;;
     repeated_views)
       printf "%s" "\
