@@ -189,16 +189,23 @@ analyze_helper()
   local total_exposures=0
   local repeat_exposures=0
 
-  mapfile -t tmparray <<< "$(jq -r ".data[] | select(.$1 == \"$2\").total_exposures" "${DATA_FILE}")"
+  if [[ "$#" == 3 ]]; then
+    local argtwo="\"$2\""
+  elif [[ "$1" == "--unquote" ]]; then
+    argtwo="$3"
+    shift
+  fi
+
+  mapfile -t tmparray <<< "$(jq -r ".data[] | select(.$1 == ${argtwo}).total_exposures" "${DATA_FILE}")"
   total_exposures=$(total_array "${tmparray[@]}")
-  mapfile -t tmparray <<< "$(jq -r ".data[] | select(.$1 == \"$2\").repeat_exposures" "${DATA_FILE}")"
+  mapfile -t tmparray <<< "$(jq -r ".data[] | select(.$1 == ${argtwo}).repeat_exposures" "${DATA_FILE}")"
   repeat_exposures=$(total_array "${tmparray[@]}")
 
   if [[ "${total_exposures}" == 0 ]] && [[ "${repeat_exposures}" == 0 ]]; then
     return
   fi
 
-  printf "%s rate: %s%% (%sR/%sE)\n" "$3" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${repeat_exposures}" "${total_exposures}"
+  printf "%s rate: %s%% (%sE/%sR)\n" "$3" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${total_exposures}" "${repeat_exposures}"
 }
 
 # Prints repeat rates per age bracket
@@ -333,7 +340,7 @@ analyze_shift()
         continue
       fi
 
-      printf "%s:00-%s:59 repeat rate: %s%% (%s / %s)\n" "${hour}" "${hour}" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${repeat_exposures}" "${total_exposures}"
+      printf "%s:00-%s:59 repeat rate: %s%% (%sE/%sR)\n" "${hour}" "${hour}" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${total_exposures}" "${repeat_exposures}"
     done
 
     printf "\n"
@@ -373,11 +380,10 @@ analyze_week()
 {
   print_header "By week of year"
   local prettyprint=""
-  local -r list_of_weeks=(16 17 18 19 20 21 22 23)
 
-  for week in "${list_of_weeks[@]}"; do
+  for week in {1..53}; do
     prettyprint="Week ${week}"
-    analyze_helper "week_of_year" "${week}" "${prettyprint}"
+    analyze_helper --unquote "week_of_year" "${week}" "${prettyprint}"
   done
 }
 
@@ -405,7 +411,7 @@ analyze()
     "repeat-reasons") analyze_repeat_reasons ;;
     "shift") analyze_shift ;;
     "tech") analyze_tech ;;
-    "week-of-year") analyze_week ;;
+    "week") analyze_week ;;
     *) exit_script_on_failure "Command \"analyze $1\" not recognized"
   esac
 }
@@ -523,7 +529,7 @@ show_all()
   json_parser="$(jq -r .data[${json_index}] "${DATA_FILE}")"
 
   while [[ "${json_parser}" != "null" ]]; do
-    show_today_helper "$(( json_index + 1 ))" "${json_parser}"
+    show_today_helper "$(( json_index + 1 ))" "${json_parser}" &
 
     json_index=$(( json_index + 1 ))
     json_parser="$(jq -r .data[${json_index}] "${DATA_FILE}")"
@@ -532,8 +538,12 @@ show_all()
   # Wait for all "show_today_helper ... &"s to finish
   wait
 
-  printf "\n\n"
-  sort -n "${TMP_OUTPUT}"
+  if [[ -f "${TMP_OUTPUT}" ]]; then
+    printf "\n\n"
+    sort -n "${TMP_OUTPUT}"
+  else
+    exit_script_on_failure "No exams performed yet"
+  fi
 }
 
 # Pretty prints all the exposure entries from today
@@ -559,7 +569,11 @@ show_today()
   # Wait for all "show_today_helper ... &"s to finish
   wait
 
-  sort -n "${TMP_OUTPUT}"
+  if [[ -f "${TMP_OUTPUT}" ]]; then
+    sort -n "${TMP_OUTPUT}"
+  else
+    exit_script_on_failure "No exams performed yet today"
+  fi
 
   # Get total and repeat exposures for today only
   local to_add
@@ -577,7 +591,7 @@ show_today()
 show_today_helper()
 {
   local alldata
-  mapfile -t alldata <<< "$(jq -r ".tech, .exam_type, .total_exposures, .repeat_exposures, .equipment, .patient_type, .patient_age, .exact_time, .day_of_week, .week_of_year" <<< "$2")"
+  mapfile -t alldata <<< "$(jq -r ".tech, .exam_type, .total_exposures, .repeat_exposures, .equipment, .patient_type, .patient_age, .exact_time" <<< "$2")"
 
   local -r month_day="$(jq --raw-output '[.day_of_week, .month, .year, .exact_time, .week_of_year] | join(" ") | strptime("%a %b %Y %H:%M:%S %U") | strftime("%m/%d")' <<< "$2")"
 
@@ -590,7 +604,14 @@ show_today_helper()
   # 6 patient age
   # 7 exact time
 
-  printf "%s. (%s @ %s) [%sE/%sR] %s y/o %s with %s, %s\n" "$1" "${month_day}" "${alldata[7]}" "${alldata[2]}" "${alldata[3]}" "${alldata[6]}" "${alldata[1]}" "${alldata[0]}" "$(format_equipment_patient "${alldata[4]}" "${alldata[5]}")" >> "${TMP_OUTPUT}"
+  # If at least one repeat, also list repeat reasons
+  if [[ "${alldata[3]}" -gt 0 ]]; then
+    # Get repeat reasons
+    local -r repeat_reasons="$(jq -r ".repeat_reasons" <<< "$2")"
+    printf "%s. (%s @ %s) [%sE/%sR] %s y/o %s with %s, %s (RR: %s)\n" "$1" "${month_day}" "${alldata[7]}" "${alldata[2]}" "${alldata[3]}" "${alldata[6]}" "${alldata[1]}" "${alldata[0]}" "$(format_equipment_patient "${alldata[4]}" "${alldata[5]}")" "${repeat_reasons}" >> "${TMP_OUTPUT}"
+  else
+    printf "%s. (%s @ %s) [%sE/%sR] %s y/o %s with %s, %s\n" "$1" "${month_day}" "${alldata[7]}" "${alldata[2]}" "${alldata[3]}" "${alldata[6]}" "${alldata[1]}" "${alldata[0]}" "$(format_equipment_patient "${alldata[4]}" "${alldata[5]}")" >> "${TMP_OUTPUT}"
+  fi
 }
 
 # Pretty prints a patient type/equipment combo
@@ -700,13 +721,15 @@ new_entry()
 # Category: age; subcategory: 11-20
 # Listing should:
 # - print repeat rate for that subcategory
-# - print a numbered (count) list of repeated VIEWS for that subcategory
+# - print a numbered (count) list of repeated EXAMS for that subcategory
 # - print a numbered (count) list of repeat REASONS for that subcategory
 # - pretty print all exams performed within that subcategory
 # yes this is going to be huge output.
 
 list_master()
 {
+  shift
+
   # List by each data point
   case "$1" in
     "age") list_age ;;
@@ -717,8 +740,67 @@ list_master()
     "patient-type") list_type ;;
     "shift") list_shift ;;
     "week-of-year") list_week_of_year ;;
-    *) exit_script_on_failure "Command \"analyze $1\" not recognized"
+    *) exit_script_on_failure "Command \"list $1\" not recognized"
   esac
+}
+
+list_age()
+{
+  local range_low=1
+  local range_high=10
+
+  while [[ "${range_high}" -lt 120 ]]; do
+    print_header "Age bracket ${range_low}-${range_high}"
+    # First list repeat rate
+    mapfile -t tmparray <<< "$(jq -r ".data[] | select(.patient_age <= ${range_high}) | select(.patient_age >= ${range_low}).total_exposures" "${DATA_FILE}")"
+    total_exposures=$(total_array "${tmparray[@]}")
+    mapfile -t tmparray <<< "$(jq -r ".data[] | select(.patient_age >= ${range_low}) | select(.patient_age <= ${range_high}).repeat_exposures" "${DATA_FILE}")"
+    repeat_exposures=$(total_array "${tmparray[@]}")
+
+    printf "Repeat rate: %s%% (%sE/%sR)\n" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${total_exposures}" "${repeat_exposures}"
+
+    # Print a numbered (count) list of repeated EXAMS for that subcategory
+    printf "\nMost repeated exams:\n"
+    jq -r ".data[] | select(.patient_age <= ${range_high}) | select(.patient_age >= ${range_low}) | select(.repeat_exposures > 0).exam_type" "${DATA_FILE}" | sed '/^$/d' | sed 's/ /\n/g' | sort | uniq -c | sort -n --reverse | sed -e 's/^[ \t]*//'
+
+    # Print a numbered (count) list of repeat REASONS for that subcategory
+    printf "\nMost repeat reasons:\n"
+    jq -r ".data[] | select(.patient_age <= ${range_high}) | select(.patient_age >= ${range_low}).repeat_reasons" "${DATA_FILE}" | sed '/^$/d' | sed 's/ /\n/g' | sort | uniq -c | sort -n --reverse | sed -e 's/^[ \t]*//'
+
+    # Pretty print all exams performed within that subcategory
+    printf "\nList of all exams performed for this age range:\n"
+    # Filter to new tmpjson
+    local tmpjson
+    tmpjson="$(jq -r ".data[] | select(.patient_age <= ${range_high}) | select(.patient_age >= ${range_low})" "${DATA_FILE}" | jq -r -s .)"
+
+    # For each entry, print it nicely
+    local json_index=0
+    local json_parser
+    json_parser="$(jq -r .[${json_index}] <<< "${tmpjson}")"
+
+    while [[ "${json_parser}" != "null" ]]; do
+      show_today_helper "$(( json_index + 1 ))" "${json_parser}" &
+
+      json_index=$(( json_index + 1 ))
+      json_parser="$(jq -r .[${json_index}] <<< "${tmpjson}")"
+    done
+
+    wait
+
+    if [[ -f "${TMP_OUTPUT}" ]]; then
+      sort -n "${TMP_OUTPUT}"
+      printf "\n"
+    else
+      printf "\nNo exams yet\n"
+    fi
+
+    # Need to flush output file
+    printf "" > "${TMP_OUTPUT}"
+
+    # Increase age range bracket
+    range_low=$(( range_low + 10 ))
+    range_high=$(( range_high + 10 ))
+  done
 }
 
 # -----------------------------------------
