@@ -282,6 +282,12 @@ analyze_exam()
   done
 }
 
+analyze_repeat_reasons()
+{
+  print_header "By repeat reason"
+  jq -r ".data[].repeat_reasons" "${DATA_FILE}" | sed '/^$/d' | sed 's/ /\n/g' | sort | uniq -c | sort -n --reverse | sed -e 's/^[ \t]*//'
+}
+
 # Prints repeat rates per shift
 #   m - morning
 #   e - evening
@@ -290,7 +296,7 @@ analyze_shift()
 {
   print_header "By shift"
   local prettyprint=""
-  local -r list_of_shifts=("m" "e" "w")
+  local -r list_of_shifts=("m" "e" "w") # mew :3
 
   for shift_hours in "${list_of_shifts[@]}"; do
     case "${shift_hours}" in
@@ -363,13 +369,25 @@ analyze_type()
   done
 }
 
+analyze_week()
+{
+  print_header "By week of year"
+  local prettyprint=""
+  local -r list_of_weeks=(16 17 18 19 20 21 22 23)
+
+  for week in "${list_of_weeks[@]}"; do
+    prettyprint="Week ${week}"
+    analyze_helper "week_of_year" "${week}" "${prettyprint}"
+  done
+}
+
 # Performs all available analysis on saved data
 analyze()
 {
   shift
 
   if [[ "$#" == 0 ]] || [[ "$1" == "all" ]]; then
-    local -r analysis_types=("age" "basic" "day_of_week" "equipment" "exam" "shift" "tech" "type")
+    local -r analysis_types=("age" "basic" "day_of_week" "equipment" "exam" "repeat_reasons" "shift" "tech" "type" "week")
     for analysis in "${analysis_types[@]}"; do
       analyze_"${analysis}"
       printf "\n"
@@ -383,9 +401,11 @@ analyze()
     "day-of-week") analyze_day_of_week ;;
     "equipment") analyze_equipment ;;
     "exam") analyze_exam ;;
-    "tech") analyze_tech ;;
     "patient-type") analyze_type ;;
+    "repeat-reasons") analyze_repeat_reasons ;;
     "shift") analyze_shift ;;
+    "tech") analyze_tech ;;
+    "week-of-year") analyze_week ;;
     *) exit_script_on_failure "Command \"analyze $1\" not recognized"
   esac
 }
@@ -493,6 +513,29 @@ print_entry_help()
   esac
 }
 
+# Pretty prints all exposure entries from all time
+show_all()
+{
+  printf "Printing all exposure entries. Please be patient..."
+
+  local json_index=0
+  local json_parser
+  json_parser="$(jq -r .data[${json_index}] "${DATA_FILE}")"
+
+  while [[ "${json_parser}" != "null" ]]; do
+    show_today_helper "$(( json_index + 1 ))" "${json_parser}"
+
+    json_index=$(( json_index + 1 ))
+    json_parser="$(jq -r .data[${json_index}] "${DATA_FILE}")"
+  done
+
+  # Wait for all "show_today_helper ... &"s to finish
+  wait
+
+  printf "\n\n"
+  sort -n "${TMP_OUTPUT}"
+}
+
 # Pretty prints all the exposure entries from today
 show_today()
 {
@@ -534,7 +577,9 @@ show_today()
 show_today_helper()
 {
   local alldata
-  mapfile -t alldata <<< "$(jq -r ".tech, .exam_type, .total_exposures, .repeat_exposures, .equipment, .patient_type, .patient_age, .exact_time" <<< "$2")"
+  mapfile -t alldata <<< "$(jq -r ".tech, .exam_type, .total_exposures, .repeat_exposures, .equipment, .patient_type, .patient_age, .exact_time, .day_of_week, .week_of_year" <<< "$2")"
+
+  local -r month_day="$(jq --raw-output '[.day_of_week, .month, .year, .exact_time, .week_of_year] | join(" ") | strptime("%a %b %Y %H:%M:%S %U") | strftime("%m/%d")' <<< "$2")"
 
   # 0 tech
   # 1 exam type
@@ -545,7 +590,7 @@ show_today_helper()
   # 6 patient age
   # 7 exact time
 
-  printf "%s. (%s) [%sE/%sR] %s y/o %s with %s, %s\n" "$1" "${alldata[7]}" "${alldata[2]}" "${alldata[3]}" "${alldata[6]}" "${alldata[1]}" "${alldata[0]}" "$(format_equipment_patient "${alldata[4]}" "${alldata[5]}")" >> "${TMP_OUTPUT}"
+  printf "%s. (%s @ %s) [%sE/%sR] %s y/o %s with %s, %s\n" "$1" "${month_day}" "${alldata[7]}" "${alldata[2]}" "${alldata[3]}" "${alldata[6]}" "${alldata[1]}" "${alldata[0]}" "$(format_equipment_patient "${alldata[4]}" "${alldata[5]}")" >> "${TMP_OUTPUT}"
 }
 
 # Pretty prints a patient type/equipment combo
@@ -652,6 +697,30 @@ new_entry()
   printf "\n(%s) [%sE/%sR] %s y/o %s with %s, %s\n" "$(date "+%H:%M:%S")" "${total_exposures}" "${repeat_exposures}" "${patient_age}" "${exam_type}" "${tech}" "$(format_equipment_patient "${equipment}" "${patient_type}")"
 }
 
+# Category: age; subcategory: 11-20
+# Listing should:
+# - print repeat rate for that subcategory
+# - print a numbered (count) list of repeated VIEWS for that subcategory
+# - print a numbered (count) list of repeat REASONS for that subcategory
+# - pretty print all exams performed within that subcategory
+# yes this is going to be huge output.
+
+list_master()
+{
+  # List by each data point
+  case "$1" in
+    "age") list_age ;;
+    "day-of-week") list_day_of_week ;;
+    "equipment") list_equipment ;;
+    "exam") list_exam ;;
+    "tech") list_tech ;;
+    "patient-type") list_type ;;
+    "shift") list_shift ;;
+    "week-of-year") list_week_of_year ;;
+    *) exit_script_on_failure "Command \"analyze $1\" not recognized"
+  esac
+}
+
 # -----------------------------------------
 # ---------------- Script -----------------
 # -----------------------------------------
@@ -678,9 +747,11 @@ if [[ -z "${1:-}" ]]; then
 fi
 
 case "$1" in
+  all) show_all ;;
   analyze) analyze "$@" ;;
   new) new_entry ;;
   today) show_today ;;
+  list) list_master "$@" ;;
   delete-last) delete_last_entry ;;
   help) print_help ;;
   *) exit_script_on_failure "Please enter a valid command."
