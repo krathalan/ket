@@ -37,6 +37,120 @@ help, e.g. "ket help"
     Print this help
 ```
 
+# Examples
+
+```
+ $ ket analyze age
+----------------------
+|   By age bracket   |
+----------------------
+1-10 rate: 0% (8E/0R)
+11-20 rate: 7.58% (66E/5R)
+21-30 rate: 1.75% (57E/1R)
+31-40 rate: 3.64% (55E/2R)
+41-50 rate: 2.54% (118E/3R)
+51-60 rate: 4.44% (90E/4R)
+61-70 rate: 6.43% (140E/9R)
+71-80 rate: 5.84% (137E/8R)
+81-90 rate: 6.67% (75E/5R)
+91-100 rate: 0% (39E/0R)
+101-110 rate: 0% (6E/0R)
+
+ $ ket analyze exam
+--------------------
+|   By exam type   |
+--------------------
+chest rate: 4.66% (193E/9R)
+ribs rate: 11.76% (34E/4R)
+finger rate: 0% (30E/0R)
+hand rate: 0% (27E/0R)
+wrist rate: 0% (48E/0R)
+forearm rate: 0% (6E/0R)
+elbow rate: 10% (20E/2R)
+humerus rate: 0% (2E/0R)
+shoulder rate: 6.25% (48E/3R)
+clavicle rate: 0% (2E/0R)
+toe rate: 14.29% (7E/1R)
+foot rate: 5% (20E/1R)
+ankle rate: 5.71% (35E/2R)
+knee rate: 6.06% (99E/6R)
+tib-fib rate: 5.88% (17E/1R)
+femur rate: 3.57% (28E/1R)
+cspine rate: 0% (19E/0R)
+tspine rate: 4.55% (22E/1R)
+lspine rate: 3.03% (33E/1R)
+pelvis rate: 10% (10E/1R)
+hip rate: 6.90% (29E/2R)
+sacrum-coccyx rate: 14.29% (7E/1R)
+scoliosis rate: 33.33% (3E/1R)
+abdomen rate: 0% (18E/0R)
+abdomen-upright rate: 0% (19E/0R)
+
+ $ ket list exam
+------------------------
+|   Exam type: chest   |
+------------------------
+chest rate: 4.66% (193E/9R)
+
+Most repeats on different equipment:
+4 2
+3 n
+2 o
+
+Most repeated views:
+7 ap
+1 pa
+1 lateral
+
+Most repeat reasons:
+3 centering-low
+3 artifact
+1 rotation
+1 centering-high
+1 anatomy-cutoff
+
+-----------------------
+|   Exam type: ribs   |
+-----------------------
+ribs rate: 11.76% (34E/4R)
+
+Most repeats on different equipment:
+3 2
+1 1
+
+Most repeated views:
+3 oblique
+1 ap
+
+Most repeat reasons:
+1 marker-in-anatomy
+1 centering-right
+1 centering-high
+1 centering
+...
+-----------------------
+|   Exam type: knee   |
+-----------------------
+knee rate: 6.06% (99E/6R)
+
+Most repeats on different equipment:
+4 2
+1 1
+
+Most repeated views:
+3 lateral
+2 ap
+1 lat
+
+Most repeat reasons:
+2 rotation
+1 overrotation
+1 overrotated
+1 other
+1 anatomy-cutoff
+...
+```
+
 ## Installation
 Install `ket-git` from the AUR: https://aur.archlinux.org/packages/ket-git/
 
