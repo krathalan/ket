@@ -758,6 +758,10 @@ list_master()
 {
   shift
 
+  if [[ "$#" == 0 ]] || [[ "$1" == "all" ]]; then
+    exit_script_on_failure "Please provide a category to list, either \"age\" or \"exam\"."
+  fi
+
   # List by each data point
   case "$1" in
     "age") list_age "$@" ;;
