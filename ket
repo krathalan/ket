@@ -252,14 +252,38 @@ analyze_basic()
   printf "Total exposures: %s\nTotal repeats: %s\nOverall repeat rate: %s%%\n" "${total_exposures}" "${total_repeats}" "$(calculate_percent "${total_repeats}" "${total_exposures}")"
 }
 
-# Prints repeat rates per day of the week
+# Prints repeat rates per day of the week and average exposures per day
 analyze_day_of_week()
 {
-  print_header "By day of week"
+  print_header "By day of week, total exposures"
   local -r list_of_days=("Sun" "Mon" "Tue" "Wed" "Thu" "Fri" "Sat")
 
   for day in "${list_of_days[@]}"; do
     analyze_helper "day_of_week" "${day}" "${day}"
+  done
+
+  printf "\n"
+
+  print_header "By day of week, average exposures per day"
+
+  local uniqueWeeks
+  local tmparray
+  local total_exposures
+
+  for day in "${list_of_days[@]}"; do
+    # Calculate how many of this day we have different weeks for 
+    uniqueWeeks="$(jq -r ".data[] | select(.day_of_week == \"${day}\").week_of_year" "${DATA_FILE}" | uniq | wc -l)"
+
+    if [[ "${uniqueWeeks}" -eq 0 ]]; then
+      continue
+    fi
+
+    # Get total number of exposures for this day
+    mapfile -t tmparray <<< "$(jq -r ".data[] | select(.day_of_week == \"${day}\").total_exposures" "${DATA_FILE}")"
+    total_exposures=$(total_array "${tmparray[@]}")
+
+    # Divide total exposures by how many of this day we have different weeks for
+    printf "%s: %s avg E/day\n" "${day}" "$(echo "scale=1; ${total_exposures} / ${uniqueWeeks}" | bc -l)"
   done
 }
 
@@ -737,10 +761,7 @@ list_master()
   # List by each data point
   case "$1" in
     "age") list_age "$@" ;;
-    "equipment") list_equipment ;;
     "exam") list_exam "$@" ;;
-    "patient-type") list_type ;;
-    "week") list_week ;;
     *) exit_script_on_failure "Command \"list $1\" not recognized"
   esac
 }
