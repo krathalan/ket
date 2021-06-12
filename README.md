@@ -151,7 +151,11 @@ Most repeat reasons:
 ```
 
 ## Installation
+### Arch
 Install `ket-git` from the AUR: https://aur.archlinux.org/packages/ket-git/
+
+### Other distros
+Clone this repo and add it to your `$PATH`. Please submit an issue if you make a package for another distro!
 
 ## Limitations
 Ket wasn't designed to keep track of my repeats for over a year, so you might run into some weird issues with the today and all commands, as well as time-based analyze commands. One way to fix this is to rename your old ket data file (located at `~/.local/share/ket`) every year, to something like `data2021.json.br` when the new year rolls around, or simply delete it.
