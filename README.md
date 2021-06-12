@@ -144,8 +144,7 @@ Most repeated views:
 
 Most repeat reasons:
 2 rotation
-1 overrotation
-1 overrotated
+2 overrotation
 1 other
 1 anatomy-cutoff
 ...
