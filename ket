@@ -24,6 +24,10 @@ set -Eeuo pipefail
 # -----------------------------------------
 
 # Colors
+GREEN=$(tput bold && tput setaf 2)
+readonly GREEN
+YELLOW=$(tput sgr0 && tput setaf 3)
+readonly YELLOW
 RED=$(tput bold && tput setaf 1)
 readonly RED
 NC=$(tput sgr0) # No color/turn off all tput attributes
@@ -141,10 +145,11 @@ print_header()
 {
   # https://stackoverflow.com/questions/5799303/print-a-character-repeatedly-in-bash#17030976
   local -r length="${#1}"
+  printf "%s" "${GREEN}"
   printf -- "%0.s-" $(seq 1 "${length}")
-  printf -- "--------\n|   %s   |\n" "$1"
+  printf -- "--------\n|   %s%s%s   |\n" "${YELLOW}" "$1" "${GREEN}"
   printf -- "%0.s-" $(seq 1 "${length}")
-  printf -- "--------\n"
+  printf -- "--------\n%s" "${NC}"
 }
 
 print_help()
@@ -388,7 +393,7 @@ analyze_week()
 }
 
 # Performs all available analysis on saved data
-analyze()
+analyze_master()
 {
   shift
 
@@ -723,8 +728,7 @@ new_entry()
 # - print repeat rate for that subcategory
 # - print a numbered (count) list of repeated EXAMS for that subcategory
 # - print a numbered (count) list of repeat REASONS for that subcategory
-# - pretty print all exams performed within that subcategory
-# yes this is going to be huge output.
+# - optionally (with -v/--verbose) pretty print all entries within that subcategory
 
 list_master()
 {
@@ -732,14 +736,11 @@ list_master()
 
   # List by each data point
   case "$1" in
-    "age") list_age ;;
-    "day-of-week") list_day_of_week ;;
+    "age") list_age "$@" ;;
     "equipment") list_equipment ;;
-    "exam") list_exam ;;
-    "tech") list_tech ;;
+    "exam") list_exam "$@" ;;
     "patient-type") list_type ;;
-    "shift") list_shift ;;
-    "week-of-year") list_week_of_year ;;
+    "week") list_week ;;
     *) exit_script_on_failure "Command \"list $1\" not recognized"
   esac
 }
@@ -749,8 +750,20 @@ list_age()
   local range_low=1
   local range_high=10
 
+  if [[ $# -gt 1 ]]; then
+    shift
+    if [[ "$1" == "-v" ]] || [[ "$1" == "--verbose" ]]; then
+      local -r verbose="y"
+    else
+      local -r verbose="n"
+    fi
+  else
+    local -r verbose="n"
+  fi
+
   while [[ "${range_high}" -lt 120 ]]; do
     print_header "Age bracket ${range_low}-${range_high}"
+
     # First list repeat rate
     mapfile -t tmparray <<< "$(jq -r ".data[] | select(.patient_age <= ${range_high}) | select(.patient_age >= ${range_low}).total_exposures" "${DATA_FILE}")"
     total_exposures=$(total_array "${tmparray[@]}")
@@ -759,39 +772,43 @@ list_age()
 
     printf "Repeat rate: %s%% (%sE/%sR)\n" "$(calculate_percent "${repeat_exposures}" "${total_exposures}")" "${total_exposures}" "${repeat_exposures}"
 
-    # Print a numbered (count) list of repeated EXAMS for that subcategory
+    # Print a numbered (count) list of repeated EXAMS
     printf "\nMost repeated exams:\n"
     jq -r ".data[] | select(.patient_age <= ${range_high}) | select(.patient_age >= ${range_low}) | select(.repeat_exposures > 0).exam_type" "${DATA_FILE}" | sed '/^$/d' | sed 's/ /\n/g' | sort | uniq -c | sort -n --reverse | sed -e 's/^[ \t]*//'
 
-    # Print a numbered (count) list of repeat REASONS for that subcategory
+    # Print a numbered (count) list of repeat REASONS
     printf "\nMost repeat reasons:\n"
     jq -r ".data[] | select(.patient_age <= ${range_high}) | select(.patient_age >= ${range_low}).repeat_reasons" "${DATA_FILE}" | sed '/^$/d' | sed 's/ /\n/g' | sort | uniq -c | sort -n --reverse | sed -e 's/^[ \t]*//'
 
-    # Pretty print all exams performed within that subcategory
-    printf "\nList of all exams performed for this age range:\n"
-    # Filter to new tmpjson
-    local tmpjson
-    tmpjson="$(jq -r ".data[] | select(.patient_age <= ${range_high}) | select(.patient_age >= ${range_low})" "${DATA_FILE}" | jq -r -s .)"
+    # Optionally pretty print all exams performed
+    if [[ "${verbose}" == "y" ]]; then
+      printf "\nList of all entries for this age range:\n"
+      # Filter to new tmpjson
+      local tmpjson
+      tmpjson="$(jq -r ".data[] | select(.patient_age <= ${range_high}) | select(.patient_age >= ${range_low})" "${DATA_FILE}" | jq -r -s .)"
 
-    # For each entry, print it nicely
-    local json_index=0
-    local json_parser
-    json_parser="$(jq -r .[${json_index}] <<< "${tmpjson}")"
-
-    while [[ "${json_parser}" != "null" ]]; do
-      show_today_helper "$(( json_index + 1 ))" "${json_parser}" &
-
-      json_index=$(( json_index + 1 ))
+      # For each entry, print it nicely
+      local json_index=0
+      local json_parser
       json_parser="$(jq -r .[${json_index}] <<< "${tmpjson}")"
-    done
 
-    wait
+      while [[ "${json_parser}" != "null" ]]; do
+        show_today_helper "$(( json_index + 1 ))" "${json_parser}" &
 
-    if [[ -f "${TMP_OUTPUT}" ]]; then
-      sort -n "${TMP_OUTPUT}"
-      printf "\n"
+        json_index=$(( json_index + 1 ))
+        json_parser="$(jq -r .[${json_index}] <<< "${tmpjson}")"
+      done
+
+      wait
+
+      if [[ -f "${TMP_OUTPUT}" ]]; then
+        sort -n "${TMP_OUTPUT}"
+        printf "\n"
+      else
+        printf "\nNo exams yet\n"
+      fi
     else
-      printf "\nNo exams yet\n"
+      printf "\n"
     fi
 
     # Need to flush output file
@@ -800,6 +817,83 @@ list_age()
     # Increase age range bracket
     range_low=$(( range_low + 10 ))
     range_high=$(( range_high + 10 ))
+  done
+}
+
+list_exam()
+{
+  local -r list_of_exams=("chest" "ribs" "chest-lateral-decub" "sternum" "upper-airway" "thumb" "finger" "hand" "wrist" "forearm" "elbow" "humerus" "shoulder" "clavicle" "scapula" "ac-joints" "toe" "foot" "ankle" "knee" "tib-fib" "femur" "patella" "calcaneus" "skull" "sinuses" "facial-bones" "orbits" "zygomatic-arches" "nasal-bones" "mandible" "tmj" "cspine" "tspine" "lspine" "pelvis" "hip" "sacrum" "coccyx" "sacrum-coccyx" "scoliosis" "si-joints" "abdomen" "abdomen-upright" "abdomen-decub" "ivu" "ugi" "barium-enema" "esophagram" "sbft" "cysto" "ercp" "myelo" "arthro" "hsg" "c-arm" "other")
+
+  if [[ $# -gt 1 ]]; then
+    shift
+    if [[ "$1" == "-v" ]] || [[ "$1" == "--verbose" ]]; then
+      local -r verbose="y"
+    else
+      local -r verbose="n"
+    fi
+  else
+    local -r verbose="n"
+  fi
+
+  for exam in "${list_of_exams[@]}"; do
+    # First, filter to a tmpjson containing only entries for that exam
+    local tmpjson
+    tmpjson="$(jq -r ".data[] | select(.exam_type == \"${exam}\")" "${DATA_FILE}" | jq -r -s .)"
+
+    if [[ "${tmpjson}" == "[]" ]]; then
+      continue
+    fi
+
+    print_header "Exam type: ${exam}"
+
+    # Print repeat rate
+    analyze_helper "exam_type" "${exam}" "${exam}"
+
+    # Print a numbered (count) list of repeats on different equipment
+    printf "\nMost repeats on different equipment:\n"
+    jq -r ".data[] | select(.repeat_exposures >= 1) | select(.exam_type == \"${exam}\").equipment" "${DATA_FILE}" | sed '/^$/d' | sed 's/ /\n/g' | sort | uniq -c | sort -n --reverse | sed -e 's/^[ \t]*//'
+
+    # Print a numbered (count) list of repeated VIEWS
+    printf "\nMost repeated views:\n"
+    jq -r ".data[] | select(.exam_type == \"${exam}\").repeated_views" "${DATA_FILE}" | sed '/^$/d' | sed 's/ /\n/g' | sort | uniq -c | sort -n --reverse | sed -e 's/^[ \t]*//'
+
+    # Print a numbered (count) list of repeat REASONS
+    printf "\nMost repeat reasons:\n"
+    jq -r ".data[] | select(.exam_type == \"${exam}\").repeat_reasons" "${DATA_FILE}" | sed '/^$/d' | sed 's/ /\n/g' | sort | uniq -c | sort -n --reverse | sed -e 's/^[ \t]*//'
+
+    # Optionally pretty print all entries
+    if [[ "${verbose}" == "y" ]]; then
+      printf "\nList of all entries for this exam:\n"
+      # Filter to new tmpjson
+      local tmpjson
+      tmpjson="$(jq -r ".data[] | select(.exam_type == \"${exam}\")" "${DATA_FILE}" | jq -r -s .)"
+
+      # For each entry, print it nicely
+      local json_index=0
+      local json_parser
+      json_parser="$(jq -r .[${json_index}] <<< "${tmpjson}")"
+
+      while [[ "${json_parser}" != "null" ]]; do
+        show_today_helper "$(( json_index + 1 ))" "${json_parser}" &
+
+        json_index=$(( json_index + 1 ))
+        json_parser="$(jq -r .[${json_index}] <<< "${tmpjson}")"
+      done
+
+      wait
+
+      if [[ -f "${TMP_OUTPUT}" ]]; then
+        sort -n "${TMP_OUTPUT}"
+        printf "\n"
+      else
+        printf "\nNo exams yet\n"
+      fi
+    else
+      printf "\n"
+    fi
+
+    # Need to flush output file
+    printf "" > "${TMP_OUTPUT}"
   done
 }
 
@@ -830,7 +924,7 @@ fi
 
 case "$1" in
   all) show_all ;;
-  analyze) analyze "$@" ;;
+  analyze) analyze_master "$@" ;;
   new) new_entry ;;
   today) show_today ;;
   list) list_master "$@" ;;
