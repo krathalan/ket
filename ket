@@ -160,10 +160,38 @@ ket - Krathalan's exposure tracker
 Track your repeated exposures and figure out why you are
 repeating the projections you're repeating.
 
+Usage: ket [COMMAND] (args...)
+
 Commands:
-  $ ket new - enter a new exam you just did
-  $ ket today - display all exams from today
-  $ ket analyze - analyze all entered exams
+${GREEN}new${NC}, e.g. \"ket new\"
+    Create a new entry, entering the details of the exam
+    you just completed.
+
+${GREEN}delete-last${NC}, e.g. \"ket delete-last\"
+    Delete the last entry you just added, in case you
+    realize you put it in wrong.
+
+${GREEN}today${NC}, e.g. \"ket today\"
+    Print out all the exams you have completed today.
+
+${GREEN}all${NC}, e.g. \"ket all\"
+    Print out all exams you've ever done. Might take a while.
+
+${GREEN}analyze${NC}, e.g. \"ket analyze exam\"
+    Analyze your repeat rates by various factors. You can
+    optionally provide an argument after analyze, such as
+    age, basic, day-of-week, equipment, exam, patient-type,
+    repeat-reasons, shift, tech, or week, to show analysis
+    only for that factor.
+
+${GREEN}list${NC} ARG, e.g. \"ket list age --verbose\"
+    List some most common factors for repeats for that sub-
+    category. Requires an argument, either age or exam. You
+    can optionally provide -v or --verbose to additionally print
+    all exams completed for that subcategory.
+
+${GREEN}help${NC}, e.g. \"ket help\"
+    Print this help
 "
 }
 
