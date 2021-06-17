@@ -299,7 +299,7 @@ analyze_day_of_week()
   local total_exposures
 
   for day in "${list_of_days[@]}"; do
-    # Calculate how many of this day we have different weeks for 
+    # Calculate how many of this day we have different weeks for
     uniqueWeeks="$(jq -r ".data[] | select(.day_of_week == \"${day}\").week_of_year" "${DATA_FILE}" | uniq | wc -l)"
 
     if [[ "${uniqueWeeks}" -eq 0 ]]; then
@@ -972,7 +972,7 @@ elif [[ -f "${DATA_FILE_PERM}" ]]; then
 fi
 
 if [[ -z "${1:-}" ]]; then
-  exit_script_on_failure "Please give a command (e.g. ket help, ket new)."
+  exit_script_on_failure "Please enter a valid command. Execute \`ket help\` to list all commands."
 fi
 
 case "$1" in
@@ -983,7 +983,7 @@ case "$1" in
   list) list_master "$@" ;;
   delete-last) delete_last_entry ;;
   help) print_help ;;
-  *) exit_script_on_failure "Please enter a valid command."
+  *) exit_script_on_failure "Please enter a valid command. Execute \`ket help\` to list all commands."
 esac
 
 # Re-compress data file
