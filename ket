@@ -99,12 +99,6 @@ match()
   local -r valid_number_regex='^[0-9]+$'
 
   case "$1" in
-    tech)
-        case "$2" in
-          matt|gary|julie|jeannette|mikey|jennika|christian|miguel|sylvie|henry|ayla|nate) return 0 ;;
-          *) return 1 ;;
-        esac
-        ;;
     exam)
         case "$2" in
           chest|ribs|chest-lateral-decub|sternum|upper-airway|thumb|finger|hand|wrist|forearm|elbow|humerus|shoulder|clavicle|scapula|ac-joints|toe|foot|ankle|knee|tib-fib|femur|patella|calcaneus|skull|sinuses|facial-bones|orbits|zygomatic-arches|nasal-bones|mandible|tmj|cspine|tspine|lspine|pelvis|hip|sacrum|coccyx|sacrum-coccyx|scoliosis|si-joints|abdomen|abdomen-upright|abdomen-decub|ivu|ugi|barium-enema|esophagram|sbft|cysto|ercp|myelo|arthro|hsg|c-arm|bone-survey|other) return 0 ;;
@@ -181,7 +175,7 @@ ${GREEN}analyze${NC}, e.g. \"ket analyze exam\"
     Analyze your repeat rates by various factors. You can
     optionally provide an argument after analyze, such as
     age, basic, day-of-week, equipment, exam, patient-type,
-    repeat-reasons, shift, tech, or week, to show analysis
+    repeat-reasons, shift, or week, to show analysis
     only for that factor.
 
 ${GREEN}list${NC} ARG, e.g. \"ket list age --verbose\"
@@ -404,17 +398,6 @@ analyze_shift()
   done
 }
 
-# Prints repeat rates per registered tech
-analyze_tech()
-{
-  print_header "By registered tech"
-  local -r list_of_techs=("matt" "gary" "julie" "jeannette" "mikey" "jennika" "christian" "miguel" "sylvie" "henry" "ayla" "nate")
-
-  for tech in "${list_of_techs[@]}"; do
-    analyze_helper "tech" "${tech}" "${tech}"
-  done
-}
-
 # Prints repeat rates per patient type
 analyze_type()
 {
@@ -450,7 +433,7 @@ analyze_master()
   shift
 
   if [[ "$#" == 0 ]] || [[ "$1" == "all" ]]; then
-    local -r analysis_types=("age" "basic" "day_of_week" "equipment" "exam" "repeat_reasons" "shift" "tech" "type" "week")
+    local -r analysis_types=("age" "basic" "day_of_week" "equipment" "exam" "repeat_reasons" "shift" "type" "week")
     for analysis in "${analysis_types[@]}"; do
       analyze_"${analysis}"
       printf "\n"
@@ -467,7 +450,6 @@ analyze_master()
     "patient-type") analyze_type ;;
     "repeat-reasons") analyze_repeat_reasons ;;
     "shift") analyze_shift ;;
-    "tech") analyze_tech ;;
     "week") analyze_week ;;
     *) exit_script_on_failure "Command \"analyze $1\" not recognized"
   esac
@@ -512,15 +494,6 @@ print_entry_help()
   m - morning
   e - evening
   w - weekend
-" ;;
-    tech)
-      printf "%s" "\
-  matt         jennika
-  gary         christian
-  julie        miguel
-  jeannette    sylvie
-  mikey        henry
-  ayla         nate
 " ;;
     exam)
       printf "%s" "\
@@ -606,11 +579,8 @@ show_all()
 # Pretty prints all the exposure entries from today
 show_today()
 {
-  local -r day_of_week="$(date +%a)"
-  local -r week_of_year="$(date +%U)"
-
-  # Filter entries to correct day of week and week of year, then output it as an array in a tmp file
-  jq -r ".data[] | select(.day_of_week == \"${day_of_week}\") | select(.week_of_year == ${week_of_year})" "${DATA_FILE}" | jq -s > "${TMP_JSON}"
+  # Filter entries to today, then output it as an array in a tmp file
+  jq -r ".data[] | select(.locale_date == \"$(date +%x)\")" "${DATA_FILE}" | jq -s > "${TMP_JSON}"
 
   local json_index=0
   local json_parser
@@ -627,7 +597,7 @@ show_today()
   wait
 
   if [[ -f "${TMP_OUTPUT}" ]]; then
-    sort -n "${TMP_OUTPUT}"
+    sort -n "${TMP_OUTPUT}" 
   else
     exit_script_on_failure "No exams performed yet today"
   fi
@@ -648,26 +618,24 @@ show_today()
 show_today_helper()
 {
   local alldata
-  mapfile -t alldata <<< "$(jq -r ".tech, .exam_type, .total_exposures, .repeat_exposures, .equipment, .patient_type, .patient_age, .exact_time" <<< "$2")"
+  mapfile -t alldata <<< "$(jq -r ".exam_type, .total_exposures, .repeat_exposures, .equipment, .patient_type, .patient_age, .exact_time, .locale_date" <<< "$2")"
 
-  local -r month_day="$(jq --raw-output '[.day_of_week, .month, .year, .exact_time, .week_of_year] | join(" ") | strptime("%a %b %Y %H:%M:%S %U") | strftime("%m/%d")' <<< "$2")"
-
-  # 0 tech
-  # 1 exam type
-  # 2 total exposures
-  # 3 repeat exposures
-  # 4 equipment
-  # 5 patient type
-  # 6 patient age
-  # 7 exact time
+  # 0 exam type
+  # 1 total exposures
+  # 2 repeat exposures
+  # 3 equipment
+  # 4 patient type
+  # 5 patient age
+  # 6 exact time
+  # 7 locale date
 
   # If at least one repeat, also list repeat reasons
-  if [[ "${alldata[3]}" -gt 0 ]]; then
+  if [[ "${alldata[2]}" -gt 0 ]]; then
     # Get repeat reasons
     local -r repeat_reasons="$(jq -r ".repeat_reasons" <<< "$2")"
-    printf "%s. (%s @ %s) [%sE/%sR] %s y/o %s with %s, %s (RR: %s)\n" "$1" "${month_day}" "${alldata[7]}" "${alldata[2]}" "${alldata[3]}" "${alldata[6]}" "${alldata[1]}" "${alldata[0]}" "$(format_equipment_patient "${alldata[4]}" "${alldata[5]}")" "${repeat_reasons}" >> "${TMP_OUTPUT}"
+    printf "%s. (%s @ %s) [%sE/%sR] %s y/o %s, %s (RR: %s)\n" "$1" "${alldata[7]}"  "${alldata[6]}" "${alldata[1]}" "${alldata[2]}" "${alldata[5]}" "${alldata[0]}" "$(format_equipment_patient "${alldata[3]}" "${alldata[4]}")" "${repeat_reasons}" >> "${TMP_OUTPUT}"
   else
-    printf "%s. (%s @ %s) [%sE/%sR] %s y/o %s with %s, %s\n" "$1" "${month_day}" "${alldata[7]}" "${alldata[2]}" "${alldata[3]}" "${alldata[6]}" "${alldata[1]}" "${alldata[0]}" "$(format_equipment_patient "${alldata[4]}" "${alldata[5]}")" >> "${TMP_OUTPUT}"
+    printf "%s. (%s @ %s) [%sE/%sR] %s y/o %s, %s\n" "$1" "${alldata[7]}" "${alldata[6]}" "${alldata[1]}" "${alldata[2]}" "${alldata[5]}" "${alldata[0]}" "$(format_equipment_patient "${alldata[3]}" "${alldata[4]}")" >> "${TMP_OUTPUT}"
   fi
 }
 
@@ -734,8 +702,6 @@ new_entry()
 
   print_entry_help "shift"
   shift_hours="$(new_entry_helper "shift" "Shift")"
-  print_entry_help "tech"
-  tech="$(new_entry_helper "tech" "Tech you worked with")"
   print_entry_help "exam"
   exam_type="$(new_entry_helper "exam" "Exam type")"
   printf "\n"
@@ -768,11 +734,11 @@ new_entry()
   print_entry_help "equipment"
   equipment="$(new_entry_helper "equipment" "${to_ask}")"
 
-  local -r tmpjson="$(jq ".data[.data | length] |= . + {\"tech\":\"${tech}\",\"shift\":\"${shift_hours}\",\"exam_type\":\"${exam_type}\",\"total_exposures\":${total_exposures},\"repeat_exposures\":${repeat_exposures},\"repeated_views\":\"${repeated_views}\",\"repeat_reasons\":\"${repeat_reasons}\",\"equipment\":\"${equipment}\",\"patient_type\":\"${patient_type}\",\"patient_age\":${patient_age},\"hour_of_day\":$(date +%H),\"day_of_week\":\"$(date +%a)\",\"month\":\"$(date +%b)\",\"year\":$(date +%Y),\"exact_time\":\"$(date "+%H:%M:%S")\",\"week_of_year\":$(date +%U)}" "${DATA_FILE}")"
+  local -r tmpjson="$(jq ".data[.data | length] |= . + {\"shift\":\"${shift_hours}\",\"exam_type\":\"${exam_type}\",\"total_exposures\":${total_exposures},\"repeat_exposures\":${repeat_exposures},\"repeated_views\":\"${repeated_views}\",\"repeat_reasons\":\"${repeat_reasons}\",\"equipment\":\"${equipment}\",\"patient_type\":\"${patient_type}\",\"patient_age\":${patient_age},\"hour_of_day\":$(date +%H),\"day_of_week\":\"$(date +%a)\",\"month\":\"$(date +%b)\",\"year\":$(date +%Y),\"exact_time\":\"$(date "+%H:%M:%S")\",\"week_of_year\":$(date +%U),\"locale_date\":\"$(date +%x)\"}" "${DATA_FILE}")"
   printf "%s" "${tmpjson}" > "${DATA_FILE}"
 
   printf "\nCreated exposure entry:"
-  printf "\n(%s) [%sE/%sR] %s y/o %s with %s, %s\n" "$(date "+%H:%M:%S")" "${total_exposures}" "${repeat_exposures}" "${patient_age}" "${exam_type}" "${tech}" "$(format_equipment_patient "${equipment}" "${patient_type}")"
+  printf "\n(%s) [%sE/%sR] %s y/o %s, %s\n" "$(date "+%H:%M:%S")" "${total_exposures}" "${repeat_exposures}" "${patient_age}" "${exam_type}" "$(format_equipment_patient "${equipment}" "${patient_type}")"
 }
 
 # Category: age; subcategory: 11-20
